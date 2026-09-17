@@ -57,11 +57,52 @@ class FunctionalTests(unittest.TestCase):
         res = self.seaweed.delete_file(fid)
         self.assertTrue(res)
 
-    # Test vacuum generated problems with Weed-FS on windows.
-    # TODO: Investigate
-    # def test_vacuum(self):
-    #     res = self.seaweed.vacuum()
-    #     self.assertTrue(res)
+    def test_vacuum(self) -> None:
+        res = self.seaweed.vacuum()
+        self.assertTrue(res)
+
+    def test_get_file_url_variants(self) -> None:
+        fid = self.seaweed.upload_file(__file__)
+        assert fid is not None
+        url_public = self.seaweed.get_file_url(fid)
+        url_internal = self.seaweed.get_file_url(fid, public=False)
+        self.assertIsNotNone(url_public)
+        self.assertIsNotNone(url_internal)
+        self.assertTrue(url_public.endswith(fid))
+        self.assertTrue(url_internal.endswith(fid))
+        res = self.seaweed.delete_file(fid)
+        self.assertTrue(res)
+
+    def test_get_file_location(self) -> None:
+        fid = self.seaweed.upload_file(__file__)
+        assert fid is not None
+        loc = self.seaweed.get_file_location(fid.split(",")[0])
+        self.assertIsNotNone(loc)
+        self.assertTrue(loc.url)
+        self.assertTrue(loc.public_url)
+        res = self.seaweed.delete_file(fid)
+        self.assertTrue(res)
+
+    def test_upload_with_options(self) -> None:
+        fid = self.seaweed.upload_file(
+            __file__,
+            name="custom_name.py",
+            content_type="text/x-python",
+            additional_headers={"X-Test-Header": "1"},
+            count="2",
+        )
+        assert fid is not None
+        self.assertTrue(self.seaweed.file_exists(fid))
+        res = self.seaweed.delete_file(fid)
+        self.assertTrue(res)
+
+    def test_internal_url_client(self) -> None:
+        seaweed = SeaweedFS(use_public_url=False)
+        fid = seaweed.upload_file(__file__)
+        assert fid is not None
+        self.assertTrue(seaweed.file_exists(fid))
+        self.assertTrue(seaweed.delete_file(fid))
+
     def test_bad_fid(self) -> None:
         self.assertRaises(BadFidFormat, self.seaweed.get_file_url, "a")
 
@@ -123,11 +164,52 @@ class FunctionalTestsSession(unittest.TestCase):
         res = self.seaweed.delete_file(fid)
         self.assertTrue(res)
 
-    # Test vacuum generated problems with Weed-FS on windows.
-    # TODO: Investigate
-    # def test_vacuum(self):
-    #     res = self.seaweed.vacuum()
-    #     self.assertTrue(res)
+    def test_vacuum(self) -> None:
+        res = self.seaweed.vacuum()
+        self.assertTrue(res)
+
+    def test_get_file_url_variants(self) -> None:
+        fid = self.seaweed.upload_file(__file__)
+        assert fid is not None
+        url_public = self.seaweed.get_file_url(fid)
+        url_internal = self.seaweed.get_file_url(fid, public=False)
+        self.assertIsNotNone(url_public)
+        self.assertIsNotNone(url_internal)
+        self.assertTrue(url_public.endswith(fid))
+        self.assertTrue(url_internal.endswith(fid))
+        res = self.seaweed.delete_file(fid)
+        self.assertTrue(res)
+
+    def test_get_file_location(self) -> None:
+        fid = self.seaweed.upload_file(__file__)
+        assert fid is not None
+        loc = self.seaweed.get_file_location(fid.split(",")[0])
+        self.assertIsNotNone(loc)
+        self.assertTrue(loc.url)
+        self.assertTrue(loc.public_url)
+        res = self.seaweed.delete_file(fid)
+        self.assertTrue(res)
+
+    def test_upload_with_options(self) -> None:
+        fid = self.seaweed.upload_file(
+            __file__,
+            name="custom_name.py",
+            content_type="text/x-python",
+            additional_headers={"X-Test-Header": "1"},
+            count="2",
+        )
+        assert fid is not None
+        self.assertTrue(self.seaweed.file_exists(fid))
+        res = self.seaweed.delete_file(fid)
+        self.assertTrue(res)
+
+    def test_internal_url_client(self) -> None:
+        seaweed = SeaweedFS(use_public_url=False)
+        fid = seaweed.upload_file(__file__)
+        assert fid is not None
+        self.assertTrue(seaweed.file_exists(fid))
+        self.assertTrue(seaweed.delete_file(fid))
+
     def test_bad_fid(self) -> None:
         self.assertRaises(BadFidFormat, self.seaweed.get_file_url, "a")
 

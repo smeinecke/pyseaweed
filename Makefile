@@ -26,7 +26,7 @@ test:
 	uv run pytest tests/unit
 
 test-cov:
-	uv run pytest tests/unit --cov=pyseaweed --cov-report=xml --cov-report=term-missing
+	uv run pytest tests/unit --cov=pyseaweed --cov-report=xml --cov-report=term-missing --cov-fail-under=80
 
 test-integration:
 	uv run pytest tests/integration -v -m integration --timeout=120
@@ -36,11 +36,13 @@ test-all: test-cov
 
 # Integration test helpers
 weed-up:
-	docker run -d --name pyseaweed-test-fs --network host chrislusf/seaweedfs server -dir=/data -ip=localhost
+	docker run -d --name pyseaweed-test-fs --network host chrislusf/seaweedfs server -dir=/data -ip=localhost -volume.max=2
 	@echo "Waiting for SeaweedFS master to be ready..."
 	@bash -c 'for i in $$(seq 1 60); do nc -z localhost 9333 2>/dev/null && exit 0; sleep 1; done; exit 1' || echo "Timeout waiting for SeaweedFS master"
 	@echo "Waiting for SeaweedFS volume to be ready..."
 	@bash -c 'for i in $$(seq 1 60); do nc -z localhost 8080 2>/dev/null && exit 0; sleep 1; done; exit 1' || echo "Timeout waiting for SeaweedFS volume"
+	@echo "Waiting for a writable volume..."
+	@bash -c 'for i in $$(seq 1 60); do curl -sf "http://localhost:9333/dir/assign" 2>/dev/null | grep -q "\"fid\"" && exit 0; sleep 1; done; exit 1' || echo "Timeout waiting for writable volume"
 	@echo "SeaweedFS is ready!"
 
 weed-down:

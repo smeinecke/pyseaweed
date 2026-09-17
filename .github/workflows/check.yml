@@ -61,7 +61,7 @@ jobs:
 
       - name: Run pytest (Unit Tests)
         run: |
-          uv run pytest tests/unit -v --cov=pyseaweed --cov-report=xml --cov-report=term-missing
+          uv run pytest tests/unit -v --cov=pyseaweed --cov-report=xml --cov-report=term-missing --cov-fail-under=80
 
       - name: Upload coverage report
         uses: actions/upload-artifact@v7
@@ -81,13 +81,16 @@ jobs:
 
       - name: Start SeaweedFS
         run: |
-          docker run -d --name pyseaweed-test-fs --network host chrislusf/seaweedfs server -dir=/data -ip=localhost
+          docker run -d --name pyseaweed-test-fs --network host chrislusf/seaweedfs server -dir=/data -ip=localhost -volume.max=2
           echo "Waiting for SeaweedFS master to be ready..."
           timeout 60 bash -c 'until nc -z localhost 9333; do sleep 1; done'
           echo "SeaweedFS master is ready!"
           echo "Waiting for SeaweedFS volume to be ready..."
           timeout 60 bash -c 'until nc -z localhost 8080; do sleep 1; done'
           echo "SeaweedFS volume is ready!"
+          echo "Waiting for a writable volume..."
+          timeout 60 bash -c 'until curl -sf "http://localhost:9333/dir/assign" | grep -q "\"fid\""; do sleep 1; done'
+          echo "SeaweedFS is writable!"
 
       - name: Cache dependencies
         uses: actions/cache@v6
