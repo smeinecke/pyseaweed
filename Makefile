@@ -1,0 +1,70 @@
+# Makefile
+
+.PHONY: all format reformat-ruff check fix-ruff fix test test-cov test-integration test-all weed-up weed-down test-integration-local vulture complexity xenon bandit pyright validate
+
+# Default target: runs format and check
+all: validate test
+
+# Format the code using ruff
+format:
+	uv run ruff format --check --diff .
+
+reformat-ruff:
+	uv run ruff format .
+
+# Check the code using ruff
+check:
+	uv run ruff check .
+
+fix-ruff:
+	uv run ruff check . --fix
+
+fix: reformat-ruff fix-ruff
+	@echo "Updated code."
+
+test:
+	uv run pytest tests/unit
+
+test-cov:
+	uv run pytest tests/unit --cov=pyseaweed --cov-report=xml --cov-report=term-missing
+
+test-integration:
+	uv run pytest tests/integration -v -m integration --timeout=120
+
+test-all: test-cov
+	uv run pytest tests/integration -v -m integration --timeout=120
+
+# Integration test helpers
+weed-up:
+	docker run -d --name pyseaweed-test-fs --network host chrislusf/seaweedfs server -dir=/data -ip=localhost
+	@echo "Waiting for SeaweedFS master to be ready..."
+	@bash -c 'for i in $$(seq 1 60); do nc -z localhost 9333 2>/dev/null && exit 0; sleep 1; done; exit 1' || echo "Timeout waiting for SeaweedFS master"
+	@echo "Waiting for SeaweedFS volume to be ready..."
+	@bash -c 'for i in $$(seq 1 60); do nc -z localhost 8080 2>/dev/null && exit 0; sleep 1; done; exit 1' || echo "Timeout waiting for SeaweedFS volume"
+	@echo "SeaweedFS is ready!"
+
+weed-down:
+	docker rm -f pyseaweed-test-fs
+
+test-integration-local: weed-up
+	uv run pytest tests/integration -v -m integration --timeout=120
+	$(MAKE) weed-down
+
+vulture:
+	uv run vulture . --exclude .venv,tests,docs --make-whitelist
+
+complexity:
+	uv run radon cc . -a -nc
+
+xenon:
+	uv run xenon -b D -m B -a B .
+
+bandit:
+	uv run bandit -c pyproject.toml -r .
+
+pyright:
+	uv run pyright
+
+# Validate the code (format + check)
+validate: format check complexity bandit pyright vulture
+	@echo "Validation passed. Your code is ready to push."
