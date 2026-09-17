@@ -3,6 +3,7 @@
 
 
 import unittest
+from typing import Any, Dict
 
 from httmock import HTTMock
 
@@ -10,45 +11,46 @@ from pyseaweed.seaweed import SeaweedFS
 from pyseaweed.utils import Connection
 
 
-def response_content(url, request):
+def response_content(url: Any, request: Any) -> Dict[str, Any]:
     return {"status_code": 200, "content": b"OK"}
 
 
-def response_content_201(url, request):
+def response_content_201(url: Any, request: Any) -> Dict[str, Any]:
     return {"status_code": 201, "content": b"OK"}
 
 
-def response_content_202(url, request):
+def response_content_202(url: Any, request: Any) -> Dict[str, Any]:
     return {"status_code": 202, "content": b"OK"}
 
 
-def response_content_404(url, request):
+def response_content_404(url: Any, request: Any) -> Dict[str, Any]:
     return {"status_code": 404, "content": b"NOK"}
 
 
+def assign_response(url: Any, request: Any) -> Dict[str, Any]:
+    return {
+        "status_code": 200,
+        "content": b'{"fid": "3,01637037d6", "url": "localhost:8080", "publicUrl": "localhost:8080", "count": 1}',
+    }
+
+
 class ReqTests(unittest.TestCase):
-    def setUp(self):
+    def setUp(self) -> None:
         self.conn = Connection()
         pass
 
-    def test_post_file(self):
+    def test_post_file(self) -> None:
         with HTTMock(response_content):
-            r = self.conn.post_file(
-                "http://utek.pl", "tests.py", open(__file__, "rb")
-            )
+            r = self.conn.post_file("http://utek.pl", "tests.py", open(__file__, "rb"))
             self.assertEqual(r, "OK")
         with HTTMock(response_content_201):
-            r = self.conn.post_file(
-                "http://utek.pl", "tests.py", open(__file__, "rb")
-            )
+            r = self.conn.post_file("http://utek.pl", "tests.py", open(__file__, "rb"))
             self.assertEqual(r, "OK")
         with HTTMock(response_content_404):
-            r = self.conn.post_file(
-                "http://utek.pl", "tests.py", open(__file__, "rb")
-            )
+            r = self.conn.post_file("http://utek.pl", "tests.py", open(__file__, "rb"))
             self.assertIsNone(r)
 
-    def test_get_data(self):
+    def test_get_data(self) -> None:
         with HTTMock(response_content):
             r = self.conn.get_data("http://utek.pl")
             self.assertEqual(r, "OK")
@@ -56,7 +58,7 @@ class ReqTests(unittest.TestCase):
             r = self.conn.get_data("http://utek.pl")
             self.assertIsNone(r)
 
-    def test_get_raw_data(self):
+    def test_get_raw_data(self) -> None:
         with HTTMock(response_content):
             r = self.conn.get_raw_data("http://utek.pl")
             self.assertEqual(r, b"OK")
@@ -64,7 +66,7 @@ class ReqTests(unittest.TestCase):
             r = self.conn.get_raw_data("http://utek.pl")
             self.assertIsNone(r)
 
-    def test_delete_data(self):
+    def test_delete_data(self) -> None:
         with HTTMock(response_content):
             r = self.conn.delete_data("http://localhost")
             self.assertTrue(r)
@@ -75,17 +77,16 @@ class ReqTests(unittest.TestCase):
             r = self.conn.delete_data("http://localhost")
             self.assertFalse(r)
 
-    def test_prepare_headers(self):
+    def test_prepare_headers(self) -> None:
         headers = self.conn._prepare_headers()
         self.assertIsInstance(headers, dict)
         for k, v in headers.items():
             self.assertIsInstance(k, str)
             self.assertIsInstance(v, str)
 
-    def test_additional_headers(self):
+    def test_additional_headers(self) -> None:
         additional_headers = {"X-Test": "123"}
-        kwargs = {"additional_headers": additional_headers}
-        headers = self.conn._prepare_headers(**kwargs)
+        headers = self.conn._prepare_headers(additional_headers)
         self.assertIsInstance(headers, dict)
         self.assertIsNotNone(headers.get("X-Test"))
         with HTTMock(response_content):
@@ -96,30 +97,24 @@ class ReqTests(unittest.TestCase):
                 additional_headers=additional_headers,
             )
             self.assertEqual(r, "OK")
-            r = self.conn.get_data(
-                "http://utek.pl", additional_headers=additional_headers
-            )
+            r = self.conn.get_data("http://utek.pl", additional_headers=additional_headers)
             self.assertEqual(r, "OK")
-            r = self.conn.get_raw_data(
-                "http://utek.pl", additional_headers=additional_headers
-            )
+            r = self.conn.get_raw_data("http://utek.pl", additional_headers=additional_headers)
             self.assertEqual(r, b"OK")
-            r = self.conn.delete_data(
-                "http://localhost", additional_headers=additional_headers
-            )
+            r = self.conn.delete_data("http://localhost", additional_headers=additional_headers)
             self.assertTrue(r)
 
 
 class SeaweedFSTests(unittest.TestCase):
-    def setUp(self):
+    def setUp(self) -> None:
         self.seaweed = SeaweedFS()
         pass
 
-    def test_repr(self):
+    def test_repr(self) -> None:
         self.assertEqual(str(self.seaweed), "<SeaweedFS localhost:9333>")
 
-    def test_exception(self):
-        with HTTMock(response_content):
+    def test_exception(self) -> None:
+        with HTTMock(assign_response):
             with self.assertRaises(ValueError):
                 self.seaweed.upload_file(stream=None, name="test.py")
             with self.assertRaises(ValueError):
