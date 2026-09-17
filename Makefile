@@ -47,7 +47,7 @@ weed-up:
 	@echo "SeaweedFS is ready!"
 
 weed-down:
-	@docker rm -f pyseaweed-test-fs
+	@docker rm -f pyseaweed-test-fs 2>/dev/null || true
 
 test-integration-local: weed-up
 	@uv run pytest tests/integration -v -m integration --timeout=120; status=$$?; $(MAKE) weed-down; exit $$status

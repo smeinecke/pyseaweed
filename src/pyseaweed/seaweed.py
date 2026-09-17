@@ -343,13 +343,16 @@ class SeaweedFS:
                 data = json.loads(res) if res else {}
             except ValueError:
                 data = {}
-            if not isinstance(data, dict) or data.get("error") is not None or "fid" not in data:
+            if not isinstance(data, dict) or data.get("error") is not None:
+                return None
+            fid = data.get("fid")
+            if not isinstance(fid, str) or not fid:
                 return None
             key = "publicUrl" if self.use_public_url else "url"
             volume_url = data.get(key) or data.get("url")
             if not volume_url:
                 return None
-            post_url = f"http://{volume_url}/{data['fid']}"
+            post_url = f"http://{volume_url}/{fid}"
 
             res = self.conn.post_file(post_url, filename, file_stream, additional_headers=additional_headers, content_type=content_type)
         finally:
@@ -363,7 +366,7 @@ class SeaweedFS:
         except ValueError:
             response_data = {}
         if isinstance(response_data, dict) and "size" in response_data:
-            return data.get("fid")
+            return fid
 
         raise RuntimeError(f"Upload failed: {response_data}")
 
@@ -568,5 +571,5 @@ class SeaweedFS:
             response_data = {}
         if not isinstance(response_data, dict):
             return None
-        version = response_data.get("Version")
-        return version if isinstance(version, str) else None
+        version_str = response_data.get("Version")
+        return version_str if isinstance(version_str, str) else None
