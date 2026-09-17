@@ -2,6 +2,17 @@
 PySeaweed
 *********************************************************
 
+|ci| |release| |docs| |python|
+
+.. |ci| image:: https://github.com/smeinecke/pyseaweed/actions/workflows/check.yml/badge.svg
+   :target: https://github.com/smeinecke/pyseaweed/actions/workflows/check.yml
+.. |release| image:: https://img.shields.io/github/v/release/smeinecke/pyseaweed
+   :target: https://github.com/smeinecke/pyseaweed/releases
+.. |docs| image:: https://img.shields.io/badge/docs-pages-blue
+   :target: https://smeinecke.github.io/pyseaweed/
+.. |python| image:: https://img.shields.io/badge/python-%3E%3D3.13-blue
+   :target: https://pypi.org/project/pyseaweed/
+
 Class to simplify communication with Seaweed-FS_
 
 ============
