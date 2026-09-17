@@ -4,6 +4,7 @@
 
 from __future__ import print_function
 
+import io
 import os
 import unittest
 
@@ -117,6 +118,29 @@ class FunctionalTests(unittest.TestCase):
         res = self.seaweed.delete_file(fid)
         self.assertTrue(res)
 
+    def test_get_file_byte_range(self) -> None:
+        fid = self.seaweed.upload_file(stream=io.BytesIO(b"0123456789"), name="range.bin")
+        assert fid is not None
+        self.assertEqual(self.seaweed.get_file(fid, byte_range=(0, 4)), b"01234")
+        self.assertEqual(self.seaweed.get_file(fid, byte_range=(5, None)), b"56789")
+        self.assertTrue(self.seaweed.delete_file(fid))
+
+    def test_get_file_stream(self) -> None:
+        fid = self.seaweed.upload_file(stream=io.BytesIO(b"0123456789"), name="stream.bin")
+        assert fid is not None
+        stream = self.seaweed.get_file_stream(fid, chunk_size=4)
+        assert stream is not None
+        self.assertEqual(b"".join(stream), b"0123456789")
+        self.assertTrue(self.seaweed.delete_file(fid))
+
+    def test_get_file_location_collection(self) -> None:
+        fid = self.seaweed.upload_file(stream=io.BytesIO(b"data"), name="col.bin")
+        assert fid is not None
+        loc = self.seaweed.get_file_location(fid.split(",")[0], collection="")
+        self.assertIsNotNone(loc)
+        self.assertIsNone(self.seaweed.get_file_location(fid.split(",")[0], collection="no-such-collection"))
+        self.assertTrue(self.seaweed.delete_file(fid))
+
     def test_get_wrong_file(self) -> None:
         file_content = self.seaweed.get_file("3,123456790")
         self.assertIsNone(file_content)
@@ -223,6 +247,29 @@ class FunctionalTestsSession(unittest.TestCase):
         self.assertEqual(content, file_content)
         res = self.seaweed.delete_file(fid)
         self.assertTrue(res)
+
+    def test_get_file_byte_range(self) -> None:
+        fid = self.seaweed.upload_file(stream=io.BytesIO(b"0123456789"), name="range.bin")
+        assert fid is not None
+        self.assertEqual(self.seaweed.get_file(fid, byte_range=(0, 4)), b"01234")
+        self.assertEqual(self.seaweed.get_file(fid, byte_range=(5, None)), b"56789")
+        self.assertTrue(self.seaweed.delete_file(fid))
+
+    def test_get_file_stream(self) -> None:
+        fid = self.seaweed.upload_file(stream=io.BytesIO(b"0123456789"), name="stream.bin")
+        assert fid is not None
+        stream = self.seaweed.get_file_stream(fid, chunk_size=4)
+        assert stream is not None
+        self.assertEqual(b"".join(stream), b"0123456789")
+        self.assertTrue(self.seaweed.delete_file(fid))
+
+    def test_get_file_location_collection(self) -> None:
+        fid = self.seaweed.upload_file(stream=io.BytesIO(b"data"), name="col.bin")
+        assert fid is not None
+        loc = self.seaweed.get_file_location(fid.split(",")[0], collection="")
+        self.assertIsNotNone(loc)
+        self.assertIsNone(self.seaweed.get_file_location(fid.split(",")[0], collection="no-such-collection"))
+        self.assertTrue(self.seaweed.delete_file(fid))
 
     def test_get_wrong_file(self) -> None:
         file_content = self.seaweed.get_file("3,123456790")

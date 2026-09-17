@@ -6,7 +6,7 @@
 from __future__ import annotations
 
 from types import ModuleType
-from typing import BinaryIO
+from typing import BinaryIO, Iterator
 
 import requests
 
@@ -131,6 +131,38 @@ class Connection:
             return res.content
         else:
             return None
+
+    def get_stream(
+        self,
+        url: str,
+        timeout: float | None = None,
+        additional_headers: dict[str, str] | None = None,
+        chunk_size: int = 8192,
+    ) -> Iterator[bytes] | None:
+        """Get data from url as an iterator of byte chunks.
+
+        Return a chunk iterator over the content of the provided url
+        without loading the whole response body into memory.
+
+        Args:
+            url: Address of the wanted data.
+            timeout: Optional request timeout in seconds.
+            additional_headers: Additional headers to be used
+                with the request.
+            chunk_size: Size of the chunks yielded by the iterator.
+
+        Returns:
+            Iterator of response chunks or None if the request failed.
+
+        """
+        try:
+            res = self._conn.get(url, headers=self._prepare_headers(additional_headers), timeout=timeout, stream=True)
+        except requests.RequestException:
+            return None
+        if 200 <= res.status_code < 300:
+            return res.iter_content(chunk_size=chunk_size)
+        res.close()
+        return None
 
     def post_file(
         self,
