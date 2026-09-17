@@ -8,6 +8,7 @@ from __future__ import annotations
 import json
 import os
 import random
+from collections.abc import Iterator
 from typing import BinaryIO, NamedTuple
 from urllib.parse import urlencode
 
@@ -56,14 +57,38 @@ class SeaweedFS:
         """Return string representation of the instance."""
         return f"<{self.__class__.__name__} {self.master_addr}:{self.master_port}>"
 
-    def get_file(self, fid: str) -> bytes | None:
+    @staticmethod
+    def _range_headers(byte_range: tuple[int | None, int | None] | None) -> dict[str, str] | None:
+        """Build a ``Range`` request header from a (start, end) tuple.
+
+        Either bound may be None to leave it open (e.g. ``(None, 500)``
+        requests the last 500 bytes, ``(100, None)`` requests from byte
+        100 to the end).
+        """
+        if byte_range is None:
+            return None
+        start, end = byte_range
+        return {"Range": f"bytes={'' if start is None else start}-{'' if end is None else end}"}
+
+    def get_file(
+        self,
+        fid: str,
+        byte_range: tuple[int | None, int | None] | None = None,
+        params: dict[str, str] | None = None,
+    ) -> bytes | None:
         """Get file from SeaweedFS.
 
         Return file content. May be problematic for large files as content is
-        stored in memory.
+        stored in memory. Use ``get_file_stream`` for large files or
+        ``byte_range`` for partial reads.
 
         Args:
             fid: File identifier ``<volume_id>,<file_name_hash>``.
+            byte_range: Optional ``(start, end)`` tuple for a HTTP range
+                request. Either bound may be None to leave it open.
+            params: Optional query parameters for the volume request
+                (e.g. ``width``/``height``/``mode`` for image resizing or
+                ``readDeleted`` to read deleted files).
 
         Returns:
             Content of the file with provided fid or None if file doesn't
@@ -74,18 +99,53 @@ class SeaweedFS:
                 ``<volume_id>,<file_name_hash>`` format.
 
         """
-        url = self.get_file_url(fid)
+        url = self.get_file_url(fid, params=params)
         if url is None:
             return None
-        return self.conn.get_raw_data(url)
+        return self.conn.get_raw_data(url, additional_headers=self._range_headers(byte_range))
 
-    def get_file_url(self, fid: str, public: bool | None = None) -> str | None:
+    def get_file_stream(
+        self,
+        fid: str,
+        byte_range: tuple[int | None, int | None] | None = None,
+        params: dict[str, str] | None = None,
+        chunk_size: int = 8192,
+    ) -> Iterator[bytes] | None:
+        """Get file from SeaweedFS as a stream of chunks.
+
+        Unlike ``get_file`` this does not load the whole file into memory.
+
+        Args:
+            fid: File identifier ``<volume_id>,<file_name_hash>``.
+            byte_range: Optional ``(start, end)`` tuple for a HTTP range
+                request. Either bound may be None to leave it open.
+            params: Optional query parameters for the volume request.
+            chunk_size: Size of the chunks yielded by the iterator.
+
+        Returns:
+            Iterator of file chunks or None if the file doesn't exist
+            on the server.
+
+        Raises:
+            BadFidFormat: If fid is not in the
+                ``<volume_id>,<file_name_hash>`` format.
+
+        """
+        url = self.get_file_url(fid, params=params)
+        if url is None:
+            return None
+        return self.conn.get_stream(url, additional_headers=self._range_headers(byte_range), chunk_size=chunk_size)
+
+    def get_file_url(self, fid: str, public: bool | None = None, params: dict[str, str] | None = None) -> str | None:
         """Get url for the file.
 
         Args:
             fid: File identifier ``<volume_id>,<file_name_hash>``.
             public: Use the public or the internal url. Defaults to the
                 ``use_public_url`` setting of this instance.
+            params: Optional query parameters appended to the file url
+                (e.g. ``width``/``height``/``mode``/crop parameters for
+                server-side image resizing or ``readDeleted``).
 
         Returns:
             File url as string or None if the volume can't be located.
@@ -106,23 +166,30 @@ class SeaweedFS:
         if public is None:
             public = self.use_public_url
         volume_url = file_location.public_url if public else file_location.url
-        return f"http://{volume_url}/{fid}"
+        url = f"http://{volume_url}/{fid}"
+        if params:
+            url += f"?{urlencode(params)}"
+        return url
 
-    def get_file_location(self, volume_id: str) -> FileLocation | None:
+    def get_file_location(self, volume_id: str, collection: str | None = None) -> FileLocation | None:
         """Get location for the file.
 
         SeaweedFS volume is chosen randomly.
 
         Args:
             volume_id: Volume id.
+            collection: Optional collection name. Providing it speeds
+                up the lookup on the master.
 
         Returns:
             ``FileLocation`` namedtuple or None if the volume
             can't be located.
 
         """
-        params = urlencode({"volumeId": volume_id})
-        url = f"http://{self.master_addr}:{self.master_port}/dir/lookup?{params}"
+        query: dict[str, str] = {"volumeId": volume_id}
+        if collection is not None:
+            query["collection"] = collection
+        url = f"http://{self.master_addr}:{self.master_port}/dir/lookup?{urlencode(query)}"
         res = self.conn.get_data(url)
         try:
             data = json.loads(res) if res else {}
@@ -236,18 +303,7 @@ class SeaweedFS:
             RuntimeError: If the volume server rejects the upload.
 
         """
-        # we have file like object and filename
-        close_stream = False
-        if path is not None:
-            filename = os.path.basename(path) if name is None else name
-            file_stream = open(path, "rb")
-            close_stream = True
-        elif stream is not None and name is not None:
-            filename = name
-            file_stream = stream
-        else:
-            raise ValueError("If `path` is None then *both* `stream` and `name` must not be None")
-
+        filename, file_stream, close_stream = self._prepare_stream(path, stream, name)
         try:
             params = urlencode(kwargs)
             query = f"?{params}" if params else ""
@@ -280,6 +336,73 @@ class SeaweedFS:
             return data.get("fid")
 
         raise RuntimeError(f"Upload failed: {response_data}")
+
+    @staticmethod
+    def _prepare_stream(
+        path: str | None,
+        stream: BinaryIO | None,
+        name: str | None,
+    ) -> tuple[str, BinaryIO, bool]:
+        """Resolve path/stream/name into a (filename, stream, close) triple.
+
+        The returned flag indicates whether the caller owns the stream
+        (opened from ``path``) and must close it afterwards.
+        """
+        if path is not None:
+            filename = os.path.basename(path) if name is None else name
+            return filename, open(path, "rb"), True
+        if stream is not None and name is not None:
+            return name, stream, False
+        raise ValueError("If `path` is None then *both* `stream` and `name` must not be None")
+
+    def submit_file(
+        self,
+        path: str | None = None,
+        stream: BinaryIO | None = None,
+        name: str | None = None,
+        additional_headers: dict[str, str] | None = None,
+        content_type: str | None = None,
+    ) -> str | None:
+        """Upload file directly through the master ``/submit`` endpoint.
+
+        Convenience one-call upload: the master assigns a file id and
+        stores the file on the right volume server. Unlike
+        ``upload_file`` it does not support assign parameters
+        (``collection``, ``replication``, ``ttl``, ...).
+
+        Args:
+            path: Path to the file to upload.
+            stream: File-like object to upload.
+            name: Name of the uploaded file.
+            additional_headers: Additional headers for the upload request.
+            content_type: Content type of the uploaded file.
+
+        Returns:
+            Fid of the uploaded file or None if the upload failed.
+
+        Raises:
+            ValueError: If ``path`` is None and not both ``stream`` and
+                ``name`` are provided.
+
+        """
+        filename, file_stream, close_stream = self._prepare_stream(path, stream, name)
+        try:
+            url = f"http://{self.master_addr}:{self.master_port}/submit"
+            res = self.conn.post_file(url, filename, file_stream, additional_headers=additional_headers, content_type=content_type)
+        finally:
+            if close_stream:
+                file_stream.close()
+
+        if res is None:
+            return None
+        try:
+            data = json.loads(res)
+        except ValueError:
+            return None
+        if not isinstance(data, dict):
+            return None
+        fid = data.get("fid")
+        return fid if isinstance(fid, str) else None
 
     def vacuum(self, threshold: float = 0.3) -> bool:
         """Force garbage collection.

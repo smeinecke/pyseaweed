@@ -189,10 +189,19 @@ class ReqTests(unittest.TestCase):
         with HTTMock(response_content):
             self.assertEqual(conn.get_data("http://utek.pl"), "OK")
 
+    def test_get_stream(self) -> None:
+        with HTTMock(response_content):
+            stream = self.conn.get_stream("http://utek.pl")
+            assert stream is not None
+            self.assertEqual(b"".join(stream), b"OK")
+        with HTTMock(response_content_404):
+            self.assertIsNone(self.conn.get_stream("http://utek.pl"))
+
     def test_transport_errors(self) -> None:
         with mock.patch.object(requests, "get", side_effect=requests.ConnectionError):
             self.assertIsNone(self.conn.get_data("http://utek.pl"))
             self.assertIsNone(self.conn.get_raw_data("http://utek.pl"))
+            self.assertIsNone(self.conn.get_stream("http://utek.pl"))
         with mock.patch.object(requests, "head", side_effect=requests.Timeout):
             self.assertIsNone(self.conn.head("http://utek.pl"))
         with mock.patch.object(requests, "post", side_effect=requests.ConnectionError):
@@ -284,6 +293,58 @@ class SeaweedFSTests(unittest.TestCase):
         with HTTMock(mock):
             self.assertIsNone(self.seaweed.get_file(FID))
 
+    def test_get_file_byte_range(self) -> None:
+        captured: Dict[str, Any] = {}
+
+        def ranged_file(url: Any, request: Any) -> Dict[str, Any]:
+            captured["range"] = request.headers.get("Range")
+            return {"status_code": 206, "content": b"file-"}
+
+        mock = dispatch([
+            ("/dir/lookup", json_resp({"locations": [VOLUME_RESP]})),
+            ("/" + FID.split(",")[0] + ",", ranged_file),
+        ])
+        with HTTMock(mock):
+            self.assertEqual(self.seaweed.get_file(FID, byte_range=(0, 4)), b"file-")
+            self.assertEqual(captured["range"], "bytes=0-4")
+            self.seaweed.get_file(FID, byte_range=(None, 100))
+            self.assertEqual(captured["range"], "bytes=-100")
+            self.seaweed.get_file(FID, byte_range=(100, None))
+            self.assertEqual(captured["range"], "bytes=100-")
+
+    def test_get_file_params(self) -> None:
+        with HTTMock(FULL):
+            url = self.seaweed.get_file_url(FID, params={"width": "10", "mode": "fit"})
+            self.assertTrue(url is not None and url.endswith(f"/{FID}?width=10&mode=fit"))
+            self.assertEqual(self.seaweed.get_file(FID, params={"width": "10"}), b"file-content")
+
+    def test_get_file_stream(self) -> None:
+        with HTTMock(FULL):
+            stream = self.seaweed.get_file_stream(FID)
+            assert stream is not None
+            self.assertEqual(b"".join(stream), b"file-content")
+            stream = self.seaweed.get_file_stream(FID, byte_range=(0, 4), chunk_size=2)
+            assert stream is not None
+            self.assertEqual(b"".join(stream), b"file-content")
+
+    def test_get_file_stream_no_volume(self) -> None:
+        mock = dispatch([("/dir/lookup", json_resp({"locations": []}))])
+        with HTTMock(mock):
+            self.assertIsNone(self.seaweed.get_file_stream(FID))
+
+    def test_get_file_location_collection(self) -> None:
+        captured: Dict[str, Any] = {}
+
+        def lookup(url: Any, request: Any) -> Dict[str, Any]:
+            captured["query"] = url.query
+            return json_resp({"locations": [VOLUME_RESP]})
+
+        with HTTMock(dispatch([("/dir/lookup", lookup)])):
+            loc = self.seaweed.get_file_location("3", collection="pytest")
+            assert loc is not None
+        self.assertIn("collection=pytest", captured["query"])
+        self.assertIn("volumeId=3", captured["query"])
+
     def test_get_file_size(self) -> None:
         with HTTMock(FULL):
             self.assertEqual(self.seaweed.get_file_size(FID), 123)
@@ -364,6 +425,26 @@ class SeaweedFSTests(unittest.TestCase):
         mock = dispatch([("/dir/assign", json_resp({"fid": FID, "count": 1}))])
         with HTTMock(mock):
             self.assertIsNone(self.seaweed.upload_file(__file__))
+
+    def test_submit_file(self) -> None:
+        resp = {"fid": FID, "fileName": "test.py", "fileUrl": f"vol.local:8080/{FID}", "size": 123}
+        mock = dispatch([("/submit", json_resp(resp, status=201))])
+        with HTTMock(mock):
+            self.assertEqual(self.seaweed.submit_file(__file__), FID)
+            with open(__file__, "rb") as f:
+                self.assertEqual(self.seaweed.submit_file(stream=f, name="test.py"), FID)
+
+    def test_submit_file_errors(self) -> None:
+        with HTTMock(dispatch([("/submit", {"status_code": 500, "content": b"err"})])):
+            self.assertIsNone(self.seaweed.submit_file(__file__))
+        with HTTMock(dispatch([("/submit", {"status_code": 201, "content": b"not json"})])):
+            self.assertIsNone(self.seaweed.submit_file(__file__))
+        with HTTMock(dispatch([("/submit", json_resp([1, 2], status=201))])):
+            self.assertIsNone(self.seaweed.submit_file(__file__))
+        with HTTMock(dispatch([("/submit", json_resp({"size": 1}, status=201))])):
+            self.assertIsNone(self.seaweed.submit_file(__file__))
+        with self.assertRaises(ValueError):
+            self.seaweed.submit_file()
 
     def test_vacuum(self) -> None:
         with HTTMock(FULL):
