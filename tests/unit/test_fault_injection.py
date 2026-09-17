@@ -244,13 +244,14 @@ class TestAsyncFaultInjection:
         await conn.close()
 
     async def test_truncated_body_stream_async(self, faulty_server: _FaultyServer) -> None:
-        faulty_server.script = [("partial", b"short", 100)]
+        # body exceeds chunk_size so one chunk is yielded before the
+        # truncation raises — it must propagate, not end silently
+        faulty_server.script = [("partial", b"x" * 9000, 20000)]
         conn = AsyncConnection()
         stream = conn.get_stream(_url(faulty_server))
-        chunks = [c async for c in stream]
-        # mid-stream HTTP errors are swallowed: the iterator ends
-        # silently (httpx discards the incomplete buffered chunk)
-        assert chunks == []
+        with pytest.raises(httpx.HTTPError):
+            async for _ in stream:
+                pass
         await conn.close()
 
     async def test_stream_retry_exhaustion_count(self, faulty_server: _FaultyServer, monkeypatch: pytest.MonkeyPatch) -> None:
@@ -270,12 +271,25 @@ class TestAsyncFaultInjection:
             pass
 
         monkeypatch.setattr("pyseaweed.async_client.asyncio.sleep", no_sleep)
-        faulty_server.script = [("partial", b"short", 100), ("status", 200, b"full-body")]
+        # a chunk is already yielded before the truncation: retrying
+        # would replay the body from byte 0 and corrupt the output,
+        # so the error propagates without a second request
+        faulty_server.script = [("partial", b"x" * 9000, 20000), ("status", 200, b"full-body")]
         conn = AsyncConnection(retries=1)
-        stream = conn.get_stream(_url(faulty_server))
-        # the retry re-requests from scratch: the truncated first
-        # attempt delivers nothing, the retried attempt succeeds
-        chunks = [c async for c in stream]
+        with pytest.raises(httpx.HTTPError):
+            async for _ in conn.get_stream(_url(faulty_server)):
+                pass
+        assert faulty_server.calls == 1
+        await conn.close()
+
+    async def test_stream_retry_before_first_byte(self, faulty_server: _FaultyServer, monkeypatch: pytest.MonkeyPatch) -> None:
+        async def no_sleep(_: float) -> None:
+            pass
+
+        monkeypatch.setattr("pyseaweed.async_client.asyncio.sleep", no_sleep)
+        faulty_server.script = ["reset", ("status", 200, b"full-body")]
+        conn = AsyncConnection(retries=1)
+        chunks = [c async for c in conn.get_stream(_url(faulty_server))]
         assert b"".join(chunks) == b"full-body"
         assert faulty_server.calls == 2
         await conn.close()

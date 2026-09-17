@@ -194,6 +194,7 @@ class AsyncConnection:
     ) -> AsyncIterator[bytes]:
         """Yield response chunks, retrying the request on transient errors."""
         attempts = self.retries + 1
+        yielded = False
         for attempt in range(attempts):
             try:
                 async with self._client.stream(
@@ -204,12 +205,16 @@ class AsyncConnection:
                 ) as res:
                     if 200 <= res.status_code < 300:
                         async for chunk in res.aiter_bytes(chunk_size):
+                            yielded = True
                             yield chunk
                         return
                     if res.status_code not in _RETRYABLE_STATUS:
                         return
             except httpx.HTTPError:
-                pass
+                # Once bytes reached the consumer a retry would replay the
+                # body from byte 0 and corrupt the output — propagate instead.
+                if yielded:
+                    raise
             if attempt + 1 < attempts:
                 await asyncio.sleep(_BACKOFF_FACTOR * (2**attempt))
 
