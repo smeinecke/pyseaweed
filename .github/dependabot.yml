@@ -5,14 +5,10 @@
 
 version: 2
 updates:
-  - package-ecosystem: "pip" # See documentation for possible values
+  - package-ecosystem: "uv" # updates pyproject.toml + uv.lock
     directory: "/" # Location of package manifests
     schedule:
       interval: "weekly"
-    groups:
-      uv:
-        patterns:
-          - "uv"
 
   - package-ecosystem: "github-actions"
     directory: "/"
