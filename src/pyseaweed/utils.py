@@ -8,7 +8,7 @@ import requests
 from requests.adapters import HTTPAdapter
 from urllib3.util.retry import Retry
 
-from pyseaweed.version import __version__
+from pyseaweed._common import prepare_headers
 
 
 class Connection:
@@ -73,11 +73,7 @@ class Connection:
             Headers dict. Keys and values are strings.
 
         """
-        user_agent = f"pyseaweed/{__version__}"
-        headers = {"User-Agent": user_agent}
-        if additional_headers is not None:
-            headers.update(additional_headers)
-        return headers
+        return prepare_headers(additional_headers)
 
     def head(self, url: str, timeout: float | None = None, additional_headers: dict[str, str] | None = None) -> requests.Response | None:
         """Return response to http HEAD on provided url.

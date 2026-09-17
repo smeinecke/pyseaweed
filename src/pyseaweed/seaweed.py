@@ -1,17 +1,14 @@
 """Main PySeaweed module. Contains SeaweedFS class."""
 
 import json
-import os
 import random
-import re
 from collections.abc import Iterator
 from typing import Any, BinaryIO, NamedTuple, Self
 from urllib.parse import urlencode
 
+from pyseaweed._common import FID_PATTERN, prepare_stream, range_headers
 from pyseaweed.exceptions import BadFidFormat
 from pyseaweed.utils import Connection
-
-_FID_RE = re.compile(r"^(\d+),([0-9a-fA-F]+(?:\.[A-Za-z0-9_-]+)?)$")
 
 
 class FileLocation(NamedTuple):
@@ -73,19 +70,6 @@ class SeaweedFS:
         """Return string representation of the instance."""
         return f"<{self.__class__.__name__} {self.master_addr}:{self.master_port}>"
 
-    @staticmethod
-    def _range_headers(byte_range: tuple[int | None, int | None] | None) -> dict[str, str] | None:
-        """Build a ``Range`` request header from a (start, end) tuple.
-
-        Either bound may be None to leave it open (e.g. ``(None, 500)``
-        requests the last 500 bytes, ``(100, None)`` requests from byte
-        100 to the end). ``(None, None)`` is treated like no range.
-        """
-        if byte_range is None or byte_range == (None, None):
-            return None
-        start, end = byte_range
-        return {"Range": f"bytes={'' if start is None else start}-{'' if end is None else end}"}
-
     def get_file(
         self,
         fid: str,
@@ -121,7 +105,7 @@ class SeaweedFS:
         url = self.get_file_url(fid, params=params, collection=collection)
         if url is None:
             return None
-        return self.conn.get_raw_data(url, additional_headers=self._range_headers(byte_range))
+        return self.conn.get_raw_data(url, additional_headers=range_headers(byte_range))
 
     def get_file_stream(
         self,
@@ -156,7 +140,7 @@ class SeaweedFS:
         url = self.get_file_url(fid, params=params, collection=collection)
         if url is None:
             return None
-        return self.conn.get_stream(url, additional_headers=self._range_headers(byte_range), chunk_size=chunk_size)
+        return self.conn.get_stream(url, additional_headers=range_headers(byte_range), chunk_size=chunk_size)
 
     def get_file_url(
         self,
@@ -186,7 +170,7 @@ class SeaweedFS:
 
         """
         fid = fid.strip()
-        match = _FID_RE.match(fid)
+        match = FID_PATTERN.match(fid)
         if match is None:
             raise BadFidFormat("fid must be in format: <volume_id>,<file_name_hash>")
         volume_id = match.group(1)
@@ -339,7 +323,7 @@ class SeaweedFS:
             RuntimeError: If the volume server rejects the upload.
 
         """
-        filename, file_stream, close_stream = self._prepare_stream(path, stream, name)
+        filename, file_stream, close_stream = prepare_stream(path, stream, name)
         try:
             params = urlencode(kwargs)
             query = f"?{params}" if params else ""
@@ -376,24 +360,6 @@ class SeaweedFS:
 
         raise RuntimeError(f"Upload failed: {response_data}")
 
-    @staticmethod
-    def _prepare_stream(
-        path: str | None,
-        stream: BinaryIO | None,
-        name: str | None,
-    ) -> tuple[str, BinaryIO, bool]:
-        """Resolve path/stream/name into a (filename, stream, close) triple.
-
-        The returned flag indicates whether the caller owns the stream
-        (opened from ``path``) and must close it afterwards.
-        """
-        if path is not None:
-            filename = os.path.basename(path) if name is None else name
-            return filename, open(path, "rb"), True
-        if stream is not None and name is not None:
-            return name, stream, False
-        raise ValueError("If `path` is None then *both* `stream` and `name` must not be None")
-
     def submit_file(
         self,
         path: str | None = None,
@@ -424,7 +390,7 @@ class SeaweedFS:
                 ``name`` are provided.
 
         """
-        filename, file_stream, close_stream = self._prepare_stream(path, stream, name)
+        filename, file_stream, close_stream = prepare_stream(path, stream, name)
         try:
             url = f"http://{self.master_addr}:{self.master_port}/submit"
             res = self.conn.post_file(url, filename, file_stream, additional_headers=additional_headers, content_type=content_type)
