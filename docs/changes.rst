@@ -20,7 +20,10 @@ Changelog
     - Add admin/status endpoints: ``grow_volumes``,
       ``delete_collection``, ``cluster_status``, ``volume_status``,
       ``volume_server_status`` and ``is_healthy``
-    - Add ``Connection.close`` and context-manager support
+    - Add ``Connection.close`` and context-manager support on both
+      ``Connection`` and ``SeaweedFS``
+    - Add a configurable request ``timeout`` on ``Connection`` and
+      ``SeaweedFS``
     - Accept any 2xx status code for volume operations
     - Harden error handling for malformed server responses
 

@@ -50,6 +50,10 @@ Upload file to SeaweedFS
     # WeedFS is kept as a backward-compatible alias
     w = SeaweedFS("localhost", 9333)  # master address and port
 
+    # Optionally: request timeout and a reusable session, closed on exit
+    with SeaweedFS("localhost", 9333, use_session=True, timeout=30) as w:
+        ...
+
     # File upload (assigns a file id, then stores on a volume server)
     fid = w.upload_file("n.txt")  # path to file
 
