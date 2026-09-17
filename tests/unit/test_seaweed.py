@@ -5,6 +5,7 @@ from unittest import mock
 import pytest
 import requests
 from httmock import HTTMock, all_requests
+from requests.adapters import HTTPAdapter
 
 from pyseaweed.exceptions import BadFidFormat
 from pyseaweed.seaweed import SeaweedFS
@@ -209,6 +210,16 @@ class TestConnection:
         with mock.patch.object(requests, "delete", side_effect=requests.ConnectionError):
             assert not self.conn.delete_data("http://utek.pl")
 
+    def test_retries(self) -> None:
+        conn = Connection(retries=2)
+        assert isinstance(conn._conn, requests.Session)
+        adapter = conn._conn.get_adapter("http://x")
+        assert isinstance(adapter, HTTPAdapter)
+        assert adapter.max_retries.total == 2
+        conn.close()
+        # retries=0 without session stays on the plain module
+        assert not isinstance(Connection()._conn, requests.Session)
+
     def test_default_timeout(self) -> None:
         conn = Connection(timeout=7.5)
         with mock.patch.object(requests, "get", return_value=mock.Mock(status_code=200, text="OK")) as get_mock:
@@ -255,9 +266,14 @@ class TestSeaweedFS:
             assert self.seaweed.get_file_url(FID, public=False) == f"http://vol.local:8080/{FID}"
 
     def test_get_file_url_bad_fid(self) -> None:
-        for bad_fid in ("badfid", "1,2,3", "3,", ",abc", "", "  "):
+        for bad_fid in ("badfid", "1,2,3", "3,", ",abc", "", "  ", "x,abc", "3,xyz"):
             with pytest.raises(BadFidFormat):
                 self.seaweed.get_file_url(bad_fid)
+
+    def test_get_file_url_fid_with_extension(self) -> None:
+        with HTTMock(FULL):
+            url = self.seaweed.get_file_url("3,01637037d6.png")
+            assert url == "http://pub.local:8080/3,01637037d6.png"
 
     def test_get_file_url_no_volume(self) -> None:
         mock = dispatch([("/dir/lookup", json_resp({"locations": []}))])

@@ -3,12 +3,15 @@
 import json
 import os
 import random
+import re
 from collections.abc import Iterator
 from typing import Any, BinaryIO, NamedTuple, Self
 from urllib.parse import urlencode
 
 from pyseaweed.exceptions import BadFidFormat
 from pyseaweed.utils import Connection
+
+_FID_RE = re.compile(r"^(\d+),([0-9a-fA-F]+(?:\.[A-Za-z0-9_-]+)?)$")
 
 
 class FileLocation(NamedTuple):
@@ -28,6 +31,7 @@ class SeaweedFS:
         use_session: bool = False,
         use_public_url: bool = True,
         timeout: float | None = None,
+        retries: int = 0,
     ) -> None:
         """Create a SeaweedFS instance.
 
@@ -41,6 +45,8 @@ class SeaweedFS:
                 ``publicUrl`` link instead of ``url``.
             timeout: Default request timeout in seconds (default: None,
                 i.e. no timeout).
+            retries: Number of retries for transient server errors
+                (default: 0). Implies ``use_session`` when > 0.
 
         Returns:
             SeaweedFS instance.
@@ -48,7 +54,7 @@ class SeaweedFS:
         """
         self.master_addr = master_addr
         self.master_port = master_port
-        self.conn = Connection(use_session, timeout=timeout)
+        self.conn = Connection(use_session, timeout=timeout, retries=retries)
         self.use_public_url = use_public_url
 
     def close(self) -> None:
@@ -180,12 +186,10 @@ class SeaweedFS:
 
         """
         fid = fid.strip()
-        try:
-            volume_id, file_key = fid.split(",")
-        except ValueError:
+        match = _FID_RE.match(fid)
+        if match is None:
             raise BadFidFormat("fid must be in format: <volume_id>,<file_name_hash>")
-        if not volume_id or not file_key:
-            raise BadFidFormat("fid must be in format: <volume_id>,<file_name_hash>")
+        volume_id = match.group(1)
         file_location = self.get_file_location(volume_id, collection=collection)
         if file_location is None:
             return None

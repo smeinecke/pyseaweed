@@ -5,6 +5,8 @@ from types import ModuleType
 from typing import BinaryIO, Self
 
 import requests
+from requests.adapters import HTTPAdapter
+from urllib3.util.retry import Retry
 
 from pyseaweed.version import __version__
 
@@ -12,7 +14,7 @@ from pyseaweed.version import __version__
 class Connection:
     """Handle http communication with SeaweedFS."""
 
-    def __init__(self, use_session: bool = False, timeout: float | None = None) -> None:
+    def __init__(self, use_session: bool = False, timeout: float | None = None, retries: int = 0) -> None:
         """Create a Connection instance.
 
         Args:
@@ -21,11 +23,26 @@ class Connection:
             timeout: Default request timeout in seconds. Applied to every
                 request unless overridden per call (default: None, i.e. no
                 timeout).
+            retries: Number of retries for failed requests with transient
+                server errors (500, 502, 503, 504). Only idempotent HTTP
+                methods are retried. Implies ``use_session`` when > 0
+                (default: 0, i.e. no retries).
 
         """
         self._conn: requests.Session | ModuleType
-        if use_session:
-            self._conn = requests.Session()
+        if use_session or retries:
+            session = requests.Session()
+            if retries:
+                adapter = HTTPAdapter(
+                    max_retries=Retry(
+                        total=retries,
+                        backoff_factor=0.3,
+                        status_forcelist=(500, 502, 503, 504),
+                    )
+                )
+                session.mount("http://", adapter)
+                session.mount("https://", adapter)
+            self._conn = session
         else:
             self._conn = requests
         self.timeout = timeout
