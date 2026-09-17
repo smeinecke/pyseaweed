@@ -104,7 +104,7 @@ jobs:
 
       - name: Start SeaweedFS
         run: |
-          docker run -d --name pyseaweed-test-fs --network host chrislusf/seaweedfs server -dir=/data -ip=localhost -volume.max=5
+          docker run -d --name pyseaweed-test-fs --network host chrislusf/seaweedfs server -dir=/data -ip=localhost -volume.max=5 -filer
           echo "Waiting for SeaweedFS master to be ready..."
           timeout 60 bash -c 'until nc -z localhost 9333; do sleep 1; done'
           echo "SeaweedFS master is ready!"
@@ -114,6 +114,9 @@ jobs:
           echo "Waiting for a writable volume..."
           timeout 60 bash -c 'until curl -sf "http://localhost:9333/dir/assign" | grep -q "\"fid\""; do sleep 1; done'
           echo "SeaweedFS is writable!"
+          echo "Waiting for SeaweedFS filer to be ready..."
+          timeout 60 bash -c 'until nc -z localhost 8888; do sleep 1; done'
+          echo "SeaweedFS filer is ready!"
 
       - name: Cache dependencies
         uses: actions/cache@v6

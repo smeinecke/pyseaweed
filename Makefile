@@ -37,13 +37,15 @@ test-all: test-cov
 # Integration test helpers
 weed-up:
 	@docker rm -f pyseaweed-test-fs 2>/dev/null || true
-	docker run -d --name pyseaweed-test-fs --network host chrislusf/seaweedfs server -dir=/data -ip=localhost -volume.max=5
+	docker run -d --name pyseaweed-test-fs --network host chrislusf/seaweedfs server -dir=/data -ip=localhost -volume.max=5 -filer
 	@echo "Waiting for SeaweedFS master to be ready..."
 	@bash -c 'for i in $$(seq 1 60); do nc -z localhost 9333 2>/dev/null && exit 0; sleep 1; done; echo "Timeout waiting for SeaweedFS master" >&2; exit 1'
 	@echo "Waiting for SeaweedFS volume to be ready..."
 	@bash -c 'for i in $$(seq 1 60); do nc -z localhost 8080 2>/dev/null && exit 0; sleep 1; done; echo "Timeout waiting for SeaweedFS volume" >&2; exit 1'
 	@echo "Waiting for a writable volume..."
 	@bash -c 'for i in $$(seq 1 60); do curl -sf "http://localhost:9333/dir/assign" 2>/dev/null | grep -q "\"fid\"" && exit 0; sleep 1; done; echo "Timeout waiting for writable volume" >&2; exit 1'
+	@echo "Waiting for SeaweedFS filer to be ready..."
+	@bash -c 'for i in $$(seq 1 60); do nc -z localhost 8888 2>/dev/null && exit 0; sleep 1; done; echo "Timeout waiting for SeaweedFS filer" >&2; exit 1'
 	@echo "SeaweedFS is ready!"
 
 weed-down:
