@@ -215,6 +215,44 @@ class Connection:
         else:
             return None
 
+    def post(self, url: str, timeout: float | None = None, additional_headers: dict[str, str] | None = None) -> bool:
+        """Send an empty POST request to the provided url.
+
+        Args:
+            url: Address to post to.
+            timeout: Optional request timeout in seconds.
+            additional_headers: Additional headers to be used
+                with the request.
+
+        Returns:
+            Boolean. True if request was successful. False if not.
+
+        """
+        try:
+            res = self._conn.post(url, headers=self._prepare_headers(additional_headers), timeout=self.timeout if timeout is None else timeout)
+        except requests.RequestException:
+            return False
+        return 200 <= res.status_code < 300
+
+    def put(self, url: str, timeout: float | None = None, additional_headers: dict[str, str] | None = None) -> bool:
+        """Send an empty PUT request to the provided url.
+
+        Args:
+            url: Address to put to.
+            timeout: Optional request timeout in seconds.
+            additional_headers: Additional headers to be used
+                with the request.
+
+        Returns:
+            Boolean. True if request was successful. False if not.
+
+        """
+        try:
+            res = self._conn.put(url, headers=self._prepare_headers(additional_headers), timeout=self.timeout if timeout is None else timeout)
+        except requests.RequestException:
+            return False
+        return 200 <= res.status_code < 300
+
     def delete_data(self, url: str, timeout: float | None = None, additional_headers: dict[str, str] | None = None) -> bool:
         """Delete data under provided url.
 

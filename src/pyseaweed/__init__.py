@@ -3,6 +3,7 @@
 from typing import TYPE_CHECKING
 
 from pyseaweed.exceptions import BadFidFormat
+from pyseaweed.filer import Filer
 from pyseaweed.seaweed import FileLocation, SeaweedFS
 from pyseaweed.version import __version__
 
@@ -18,6 +19,7 @@ __all__ = [
     "AsyncSeaweedFS",
     "BadFidFormat",
     "FileLocation",
+    "Filer",
     "SeaweedFS",
     "WeedFS",
     "__version__",
