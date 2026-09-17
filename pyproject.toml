@@ -93,7 +93,7 @@ skips = ["B311"]
 
 [tool.vulture]
 exclude = ["dist", "build", "venv", ".venv", "tests", "docs"]
-ignore_names = ["WeedFS", "VERSION"]
+ignore_names = ["WeedFS", "VERSION", "exc_type", "exc_val", "exc_tb"]
 min_confidence = 80
 paths = ["."]
 sort_by_size = true

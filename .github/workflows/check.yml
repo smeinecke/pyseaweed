@@ -81,7 +81,7 @@ jobs:
 
       - name: Start SeaweedFS
         run: |
-          docker run -d --name pyseaweed-test-fs --network host chrislusf/seaweedfs server -dir=/data -ip=localhost -volume.max=2
+          docker run -d --name pyseaweed-test-fs --network host chrislusf/seaweedfs server -dir=/data -ip=localhost -volume.max=5
           echo "Waiting for SeaweedFS master to be ready..."
           timeout 60 bash -c 'until nc -z localhost 9333; do sleep 1; done'
           echo "SeaweedFS master is ready!"

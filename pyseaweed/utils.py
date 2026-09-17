@@ -30,6 +30,19 @@ class Connection:
         else:
             self._conn = requests
 
+    def close(self) -> None:
+        """Close the underlying session, if any."""
+        if isinstance(self._conn, requests.Session):
+            self._conn.close()
+
+    def __enter__(self) -> Connection:
+        """Return self for context manager usage."""
+        return self
+
+    def __exit__(self, exc_type: object, exc_val: object, exc_tb: object) -> None:
+        """Close the underlying session on context manager exit."""
+        self.close()
+
     def _prepare_headers(self, additional_headers: dict[str, str] | None = None) -> dict[str, str]:
         """Prepare headers for http communication.
 
@@ -66,7 +79,7 @@ class Connection:
             res = self._conn.head(url, headers=self._prepare_headers(additional_headers), timeout=timeout)
         except requests.RequestException:
             return None
-        if res.status_code == 200:
+        if 200 <= res.status_code < 300:
             return res
         return None
 
@@ -89,7 +102,7 @@ class Connection:
             res = self._conn.get(url, headers=self._prepare_headers(additional_headers), timeout=timeout)
         except requests.RequestException:
             return None
-        if res.status_code == 200:
+        if 200 <= res.status_code < 300:
             return res.text
         else:
             return None
@@ -114,7 +127,7 @@ class Connection:
             res = self._conn.get(url, headers=self._prepare_headers(additional_headers), timeout=timeout)
         except requests.RequestException:
             return None
-        if res.status_code == 200:
+        if 200 <= res.status_code < 300:
             return res.content
         else:
             return None
@@ -152,7 +165,7 @@ class Connection:
             )
         except requests.RequestException:
             return None
-        if res.status_code == 200 or res.status_code == 201:
+        if 200 <= res.status_code < 300:
             return res.text
         else:
             return None
@@ -174,7 +187,7 @@ class Connection:
             res = self._conn.delete(url, headers=self._prepare_headers(additional_headers), timeout=timeout)
         except requests.RequestException:
             return False
-        if res.status_code == 200 or res.status_code == 202:
+        if 200 <= res.status_code < 300:
             return True
         else:
             return False

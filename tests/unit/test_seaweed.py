@@ -138,9 +138,23 @@ class ReqTests(unittest.TestCase):
         with HTTMock(response_content_202):
             r = self.conn.delete_data("http://localhost")
             self.assertTrue(r)
+        with HTTMock(lambda url, request: {"status_code": 204, "content": b""}):
+            r = self.conn.delete_data("http://localhost")
+            self.assertTrue(r)
         with HTTMock(response_content_404):
             r = self.conn.delete_data("http://localhost")
             self.assertFalse(r)
+
+    def test_close(self) -> None:
+        conn = Connection(use_session=True)
+        with mock.patch.object(conn._conn, "close") as close_mock:
+            conn.close()
+            close_mock.assert_called_once_with()
+        self.conn.close()
+
+    def test_context_manager(self) -> None:
+        with Connection(use_session=True) as conn:
+            self.assertIsInstance(conn, Connection)
 
     def test_prepare_headers(self) -> None:
         headers = self.conn._prepare_headers()
@@ -237,6 +251,29 @@ class SeaweedFSTests(unittest.TestCase):
             assert loc is not None
             self.assertEqual(loc.public_url, "vol.local:8080")
 
+    def test_get_file_location_locations_not_list(self) -> None:
+        mock = dispatch([("/dir/lookup", json_resp({"locations": "nope"}))])
+        with HTTMock(mock):
+            self.assertIsNone(self.seaweed.get_file_location("3"))
+
+    def test_get_file_location_filters_invalid(self) -> None:
+        mock = dispatch([("/dir/lookup", json_resp({"locations": ["garbage", {"nop": 1}, VOLUME_RESP]}))])
+        with HTTMock(mock):
+            loc = self.seaweed.get_file_location("3")
+            assert loc is not None
+            self.assertEqual(loc.url, "vol.local:8080")
+
+    def test_get_file_location_encodes_volume_id(self) -> None:
+        captured: Dict[str, Any] = {}
+
+        def lookup(url: Any, request: Any) -> Dict[str, Any]:
+            captured["query"] = url.query
+            return json_resp({"locations": []})
+
+        with HTTMock(dispatch([("/dir/lookup", lookup)])):
+            self.assertIsNone(self.seaweed.get_file_location("3&x=1"))
+        self.assertIn("volumeId=3%26x%3D1", captured["query"])
+
     def test_get_file(self) -> None:
         with HTTMock(FULL):
             self.assertEqual(self.seaweed.get_file(FID), b"file-content")
@@ -315,8 +352,16 @@ class SeaweedFSTests(unittest.TestCase):
             with self.assertRaises(RuntimeError):
                 self.seaweed.upload_file(__file__)
 
-    def test_upload_file_missing_public_url(self) -> None:
-        mock = dispatch([("/dir/assign", json_resp({"fid": FID, "url": "vol.local:8080"}))])
+    def test_upload_file_public_url_fallback(self) -> None:
+        mock = dispatch([
+            ("/dir/assign", json_resp({"fid": FID, "url": "vol.local:8080"})),
+            ("/" + FID.split(",")[0] + ",", volume_file),
+        ])
+        with HTTMock(mock):
+            self.assertEqual(self.seaweed.upload_file(__file__), FID)
+
+    def test_upload_file_no_volume_url(self) -> None:
+        mock = dispatch([("/dir/assign", json_resp({"fid": FID, "count": 1}))])
         with HTTMock(mock):
             self.assertIsNone(self.seaweed.upload_file(__file__))
 
@@ -345,6 +390,17 @@ class SeaweedFSTests(unittest.TestCase):
         mock = dispatch([
             ("/dir/lookup", json_resp({"locations": [VOLUME_RESP]})),
             ("/" + FID.split(",")[0] + ",", no_length),
+        ])
+        with HTTMock(mock):
+            self.assertIsNone(self.seaweed.get_file_size(FID))
+
+    def test_get_file_size_bad_content_length(self) -> None:
+        def bad_length(url: Any, request: Any) -> Dict[str, Any]:
+            return {"status_code": 200, "headers": {"content-length": "abc"}, "content": b""}
+
+        mock = dispatch([
+            ("/dir/lookup", json_resp({"locations": [VOLUME_RESP]})),
+            ("/" + FID.split(",")[0] + ",", bad_length),
         ])
         with HTTMock(mock):
             self.assertIsNone(self.seaweed.get_file_size(FID))
