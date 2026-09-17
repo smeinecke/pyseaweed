@@ -336,11 +336,16 @@ class Filer:
             remote_path: Path of the file.
             names: Tag names to delete. Names are canonicalized like the
                 server does, so ``color`` matches the stored ``Color``
-                tag. If None, all tags are deleted.
+                tag. If None, all tags are deleted. An empty iterable
+                deletes nothing and is a no-op.
 
         Returns:
             True if the tags were deleted. False otherwise.
 
         """
+        if names is not None:
+            names = list(names)
+            if not names:
+                return True
         tagging = "" if names is None else ",".join(canonical_tag_name(name) for name in names)
         return self.conn.delete_data(self._url(remote_path, {"tagging": tagging}))

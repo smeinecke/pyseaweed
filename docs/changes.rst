@@ -12,6 +12,8 @@ Changelog
       pagination, ``mkdir``, ``move``, ``delete`` (``recursive``),
       and extended-attribute tagging via ``set_tags``, ``get_tags``
       and ``delete_tags``
+    - Fix ``Filer.delete_tags`` / ``AsyncFiler.delete_tags`` with an
+      empty ``names`` iterable deleting *all* tags — it is now a no-op
     - Add ``AsyncFiler``, an async variant of ``Filer`` mirroring the
       full filer API on top of httpx. Available as
       ``from pyseaweed import AsyncFiler`` or
