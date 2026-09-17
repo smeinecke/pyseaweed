@@ -59,6 +59,11 @@ class TestFiler:
     def _setup(self) -> None:
         self.filer = Filer()
 
+    def test_default_conn_uses_plain_requests(self) -> None:
+        filer = Filer()
+        assert filer.conn._conn is requests
+        filer.close()
+
     def test_repr_and_context_manager(self) -> None:
         assert repr(self.filer) == "<Filer localhost:8888>"
         with self.filer as f:
@@ -95,14 +100,48 @@ class TestFiler:
             assert "collection=c" in seen[0]
             assert "ttl=3d" in seen[0]
 
+    def test_upload_file_wire_details(self) -> None:
+        captured: dict[str, Any] = {}
+
+        def handler(url: Any, request: Any) -> dict[str, Any]:
+            captured["body"] = request.body
+            captured["headers"] = request.headers
+            return json_resp({"name": "d.bin", "size": 4})
+
+        with HTTMock(all_requests(handler)):
+            self.filer.upload_file(
+                "/docs/d.bin", stream=BytesIO(b"data"), name="d.bin", additional_headers={"X-Extra": "1"}, content_type="text/x"
+            )
+        body = captured["body"]
+        if isinstance(body, str):
+            body = body.encode()
+        assert b'name="file"; filename="d.bin"' in body
+        assert b"Content-Type: text/x" in body
+        assert b"\r\ndata\r\n" in body
+        assert captured["headers"]["X-Extra"] == "1"
+
+    def test_upload_file_default_filename_is_basename(self) -> None:
+        captured: dict[str, Any] = {}
+
+        def handler(url: Any, request: Any) -> dict[str, Any]:
+            captured["body"] = request.body
+            return json_resp({"name": "x", "size": 1})
+
+        with HTTMock(all_requests(handler)):
+            self.filer.upload_file("/docs/x", __file__)
+        body = captured["body"]
+        if isinstance(body, str):
+            body = body.encode()
+        assert f'filename="{__file__.rsplit("/", 1)[-1]}"'.encode() in body
+
     def test_upload_file_failures(self) -> None:
         with HTTMock(all_requests(lambda url, request: {"status_code": 500, "content": b"err"})):
             assert self.filer.upload_file("/docs/x", __file__) is None
         with HTTMock(all_requests(lambda url, request: {"status_code": 200, "content": b"not json"})):
-            with pytest.raises(RuntimeError):
+            with pytest.raises(RuntimeError, match="Upload failed"):
                 self.filer.upload_file("/docs/x", __file__)
         with HTTMock(all_requests(lambda url, request: json_resp({"error": "bad"}))):
-            with pytest.raises(RuntimeError):
+            with pytest.raises(RuntimeError, match="Upload failed"):
                 self.filer.upload_file("/docs/x", __file__)
         with pytest.raises(ValueError):
             self.filer.upload_file("/docs/x")
@@ -111,6 +150,19 @@ class TestFiler:
         with HTTMock(FULL):
             assert self.filer.download_file("/docs/report.txt") == b"file-content"
             assert self.filer.download_file("/docs/missing.txt") is None
+
+    def test_download_file_forwards_params(self) -> None:
+        seen: list[str] = []
+
+        def handler(url: Any, request: Any) -> dict[str, Any]:
+            seen.append(url.geturl())
+            return {"status_code": 200, "content": b"data"}
+
+        with HTTMock(all_requests(handler)):
+            assert self.filer.download_file("/docs/report.txt", params={"x": "9"}) == b"data"
+            assert "x=9" in seen[0]
+            assert self.filer.download_file("/docs/report.txt") == b"data"
+            assert "?" not in seen[1]
 
     def test_download_file_byte_range(self) -> None:
         seen: list[Any] = []
@@ -146,6 +198,68 @@ class TestFiler:
             assert self.filer.stat("/x") is None
         with HTTMock(all_requests(lambda url, request: json_resp([1]))):
             assert self.filer.stat("/x") is None
+
+    def test_stat_requests_metadata_param(self) -> None:
+        seen: list[str] = []
+
+        def handler(url: Any, request: Any) -> dict[str, Any]:
+            seen.append(url.geturl())
+            return json_resp(ENTRY)
+
+        with HTTMock(all_requests(handler)):
+            self.filer.stat("/docs/report.txt")
+            assert seen[0] == "http://localhost:8888/docs/report.txt?metadata=true"
+
+    def test_list_dir_wire_details(self) -> None:
+        captured: dict[str, Any] = {}
+
+        def handler(url: Any, request: Any) -> dict[str, Any]:
+            captured["url"] = url.geturl()
+            captured["accept"] = request.headers.get("Accept")
+            return json_resp(LISTING)
+
+        with HTTMock(all_requests(handler)):
+            self.filer.list_dir("/docs/")
+            assert captured["url"] == "http://localhost:8888/docs/"
+            assert captured["accept"] == "application/json"
+
+    def test_get_file_stream_wire_details(self) -> None:
+        captured: dict[str, Any] = {}
+
+        def handler(url: Any, request: Any) -> dict[str, Any]:
+            captured["url"] = url.geturl()
+            captured["range"] = request.headers.get("Range")
+            return {"status_code": 206, "content": b"abc"}
+
+        with HTTMock(all_requests(handler)):
+            stream = self.filer.get_file_stream("/docs/report.txt", byte_range=(10, 20), chunk_size=2)
+            assert stream is not None
+            assert list(stream) == [b"ab", b"c"]
+            assert captured["url"] == "http://localhost:8888/docs/report.txt"
+            assert captured["range"] == "bytes=10-20"
+
+    def test_get_file_stream_forwards_params(self) -> None:
+        captured: dict[str, Any] = {}
+
+        def handler(url: Any, request: Any) -> dict[str, Any]:
+            captured["url"] = url.geturl()
+            captured["range"] = request.headers.get("Range")
+            return {"status_code": 200, "content": b"abc"}
+
+        with HTTMock(all_requests(handler)):
+            stream = self.filer.get_file_stream("/docs/report.txt", params={"x": "1"})
+            assert stream is not None
+            assert list(stream) == [b"abc"]
+            assert "x=1" in captured["url"]
+            assert captured["range"] is None
+
+    def test_get_file_stream_default_chunk_size(self) -> None:
+        body = b"z" * 20000
+        with HTTMock(all_requests(lambda url, request: {"status_code": 200, "content": body})):
+            stream = self.filer.get_file_stream("/docs/report.txt")
+            assert stream is not None
+            sizes = [len(c) for c in stream]
+        assert sizes == [8192, 8192, 3616]
 
     def test_list_dir(self) -> None:
         with HTTMock(FULL):
@@ -224,12 +338,15 @@ class TestFiler:
             assert self.filer.set_tags("/docs/report.txt", {"color": "red", "my-tag": "v"})
             assert seen_headers[0]["Seaweed-color"] == "red"
             assert seen_headers[0]["Seaweed-my-tag"] == "v"
+            assert seen_urls[0].endswith("?tagging=")
 
             tags = self.filer.get_tags("/docs/report.txt")
             assert tags == {"Color": "red"}
 
             assert self.filer.delete_tags("/docs/report.txt", ["color"])
             assert "tagging=Color" in seen_urls[-1]
+            assert self.filer.delete_tags("/docs/report.txt", ["color", "size"])
+            assert "tagging=Color%2CSize" in seen_urls[-1]
             assert self.filer.delete_tags("/docs/report.txt")
             assert seen_urls[-1].endswith("?tagging=")
 
@@ -271,3 +388,59 @@ class TestConnectionPostPut:
             with pytest.MonkeyPatch.context() as m:
                 m.setattr(requests, "put", lambda *a, **k: (_ for _ in ()).throw(requests.ConnectionError()))
                 assert not self.conn.put("http://utek.pl")
+
+
+class TestFilerNegativePaths:
+    """Negative-path and malformed-input coverage for Filer."""
+
+    filer: Filer
+
+    @pytest.fixture(autouse=True)
+    def _setup(self) -> None:
+        self.filer = Filer()
+
+    def test_delete_tags_empty_names_is_noop(self) -> None:
+        called: list[str] = []
+
+        def handler(url: Any, request: Any) -> dict[str, Any]:
+            called.append(url.geturl())
+            return {"status_code": 202, "content": b""}
+
+        with HTTMock(all_requests(handler)):
+            assert self.filer.delete_tags("/x", [])
+            assert self.filer.delete_tags("/x", ())
+            assert self.filer.delete_tags("/x", iter([]))
+            assert called == []
+
+    def test_set_tags_coerces_values(self) -> None:
+        seen: list[Any] = []
+
+        def handler(url: Any, request: Any) -> dict[str, Any]:
+            seen.append(dict(request.headers))
+            return {"status_code": 202, "content": b""}
+
+        with HTTMock(all_requests(handler)):
+            assert self.filer.set_tags("/x", cast(dict[str, str], {"count": 5, "ok": True}))
+            assert seen[0]["Seaweed-count"] == "5"
+            assert seen[0]["Seaweed-ok"] == "True"
+            assert self.filer.set_tags("/x", {})
+            assert not any(k.startswith("Seaweed-") for k in seen[1])
+
+    def test_stat_shape_negatives(self) -> None:
+        for data in (5, "x", [], None):
+            with HTTMock(all_requests(lambda url, request: json_resp(data))):
+                assert self.filer.stat("/x") is None
+
+    def test_list_dir_shape_negatives(self) -> None:
+        for data in (5, "x", []):
+            with HTTMock(all_requests(lambda url, request: json_resp(data))):
+                assert self.filer.list_dir("/x") is None
+        with HTTMock(all_requests(lambda url, request: json_resp({"Entries": None}))):
+            assert self.filer.list_dir("/x") == {"Entries": None}
+
+    def test_upload_missing_file(self) -> None:
+        with pytest.raises(FileNotFoundError):
+            self.filer.upload_file("/docs/x", "/nonexistent-path-xyz.txt")
+
+    def test_empty_remote_path(self) -> None:
+        assert self.filer._url("") == "http://localhost:8888/"

@@ -249,7 +249,7 @@ class TestAsyncSeaweedFS:
     async def test_get_file_url_bad_fid(self) -> None:
         seaweed = make_fs()
         for bad_fid in ("badfid", "1,2,3", "3,", ",abc", "", "  ", "x,abc", "3,xyz"):
-            with pytest.raises(BadFidFormat):
+            with pytest.raises(BadFidFormat, match="fid must be in format"):
                 await seaweed.get_file_url(bad_fid)
 
     async def test_get_file_url_no_volume(self) -> None:
@@ -300,6 +300,130 @@ class TestAsyncSeaweedFS:
     async def test_get_file_stream_no_volume(self) -> None:
         seaweed = make_fs(dispatch([("/dir/lookup", json_resp({"locations": []}))]))
         assert await seaweed.get_file_stream(FID) is None
+
+    async def test_get_file_forwards_params_collection_and_range(self) -> None:
+        captured: dict[str, Any] = {}
+
+        def handler(request: httpx.Request) -> httpx.Response:
+            if request.url.path == "/dir/lookup":
+                captured["lookup"] = str(request.url)
+                return json_resp({"locations": [VOLUME_RESP]})
+            captured["file_url"] = str(request.url)
+            captured["range"] = request.headers.get("range")
+            return httpx.Response(206, content=b"data")
+
+        seaweed = make_fs(handler)
+        assert await seaweed.get_file(FID, params={"width": "10"}, collection="mycol", byte_range=(0, 5)) == b"data"
+        assert "collection=mycol" in captured["lookup"]
+        assert "width=10" in captured["file_url"]
+        assert captured["range"] == "bytes=0-5"
+
+        captured.clear()
+        assert await seaweed.get_file(FID) == b"data"
+        assert captured["range"] is None
+
+    async def test_get_file_stream_forwards_details(self) -> None:
+        captured: dict[str, Any] = {}
+
+        def handler(request: httpx.Request) -> httpx.Response:
+            if request.url.path == "/dir/lookup":
+                captured["lookup"] = str(request.url)
+                return json_resp({"locations": [VOLUME_RESP]})
+            captured["file_url"] = str(request.url)
+            captured["range"] = request.headers.get("range")
+            return httpx.Response(206, content=b"abcde")
+
+        seaweed = make_fs(handler)
+        stream = await seaweed.get_file_stream(FID, params={"x": "y"}, collection="c", byte_range=(1, 3), chunk_size=2)
+        assert stream is not None
+        assert [c async for c in stream] == [b"ab", b"cd", b"e"]
+        assert "collection=c" in captured["lookup"]
+        assert "x=y" in captured["file_url"]
+        assert captured["range"] == "bytes=1-3"
+
+    async def test_get_file_stream_default_chunk_size(self) -> None:
+        def handler(request: httpx.Request) -> httpx.Response:
+            if request.url.path == "/dir/lookup":
+                return json_resp({"locations": [VOLUME_RESP]})
+            return httpx.Response(200, content=b"z" * 20000)
+
+        seaweed = make_fs(handler)
+        stream = await seaweed.get_file_stream(FID)
+        assert stream is not None
+        sizes = [len(c) async for c in stream]
+        assert sizes == [8192, 8192, 3616]
+
+    async def test_get_file_location_request_fails(self) -> None:
+        seaweed = make_fs(dispatch([("/dir/lookup", httpx.Response(500))]))
+        assert await seaweed.get_file_location("3") is None
+
+    async def test_get_file_location_non_dict_response(self) -> None:
+        seaweed = make_fs(dispatch([("/dir/lookup", json_resp([1, 2]))]))
+        assert await seaweed.get_file_location("3") is None
+
+    async def test_get_json_non_dict_responses(self) -> None:
+        seaweed = make_fs(dispatch([("/dir/status", json_resp([1]))]))
+        assert await seaweed.version() is None
+        seaweed = make_fs(dispatch([("/cluster/status", json_resp("str"))]))
+        assert await seaweed.cluster_status() is None
+
+    async def test_vacuum_sends_threshold(self) -> None:
+        seen: list[str] = []
+
+        def handler(request: httpx.Request) -> httpx.Response:
+            seen.append(str(request.url))
+            return httpx.Response(200, content=b"{}")
+
+        seaweed = make_fs(dispatch([("/vol/vacuum", handler)]))
+        assert await seaweed.vacuum()
+        assert "garbageThreshold=0.3" in seen[0]
+        assert await seaweed.vacuum(threshold=0.5)
+        assert "garbageThreshold=0.5" in seen[1]
+
+    async def test_get_file_url_sends_volume_id(self) -> None:
+        captured: dict[str, Any] = {}
+
+        def handler(request: httpx.Request) -> httpx.Response:
+            captured["query"] = str(request.url)
+            return json_resp({"locations": [VOLUME_RESP]})
+
+        seaweed = make_fs(dispatch([("/dir/lookup", handler)]))
+        await seaweed.get_file_url(FID)
+        assert "volumeId=3" in captured["query"]
+
+    async def test_collection_forwarded_to_lookup(self) -> None:
+        captured: list[str] = []
+
+        def handler(request: httpx.Request) -> httpx.Response:
+            if request.url.path == "/dir/lookup":
+                captured.append(str(request.url))
+                return json_resp({"locations": [VOLUME_RESP]})
+            if request.method == "HEAD":
+                return httpx.Response(200, headers={"content-length": "12"})
+            if request.method == "DELETE":
+                return httpx.Response(204)
+            return httpx.Response(404)
+
+        seaweed = make_fs(handler)
+        assert await seaweed.file_exists(FID, collection="col")
+        assert await seaweed.get_file_size(FID, collection="col") == 12
+        assert await seaweed.delete_file(FID, collection="col")
+        assert all("collection=col" in q for q in captured)
+
+    async def test_volume_server_status_wire(self) -> None:
+        captured: dict[str, Any] = {}
+
+        def handler(request: httpx.Request) -> httpx.Response:
+            if request.url.path == "/dir/lookup":
+                captured["lookup"] = str(request.url)
+                return json_resp({"locations": [VOLUME_RESP]})
+            captured["status_url"] = str(request.url)
+            return json_resp({"Version": "4.47"})
+
+        seaweed = make_fs(handler)
+        assert await seaweed.volume_server_status(FID, collection="c") == {"Version": "4.47"}
+        assert "collection=c" in captured["lookup"]
+        assert captured["status_url"] == "http://vol.local:8080/status"
 
     async def test_get_file_size(self) -> None:
         seaweed = make_fs()
@@ -395,6 +519,63 @@ class TestAsyncSeaweedFS:
         assert await seaweed.upload_file(__file__) is None
         seaweed = make_fs(dispatch([("/dir/assign", json_resp({"fid": FID, "count": 1}))]))
         assert await seaweed.upload_file(__file__) is None
+        seaweed = make_fs(dispatch([("/dir/assign", httpx.Response(500))]))
+        assert await seaweed.upload_file(__file__) is None
+        seaweed = make_fs(dispatch([
+            ("/dir/assign", json_resp({"fid": 123, "url": "vol.local:8080"})),
+            ("/123", json_resp({"size": 5}, status=201)),
+        ]))
+        assert await seaweed.upload_file(__file__) is None
+
+    async def test_upload_file_assign_error_with_fid(self) -> None:
+        resp = {"error": "quota", "fid": FID, "url": "vol.local:8080"}
+
+        def handler(request: httpx.Request) -> httpx.Response:
+            if request.url.path == "/dir/assign":
+                return json_resp(resp)
+            return json_resp({"size": 1}, status=201)
+
+        seaweed = make_fs(handler)
+        assert await seaweed.upload_file(__file__) is None
+
+    async def test_upload_file_assign_url_exact(self) -> None:
+        seen: list[str] = []
+
+        def handler(request: httpx.Request) -> httpx.Response:
+            seen.append(str(request.url))
+            if request.url.path == "/dir/assign":
+                return json_resp(ASSIGN_RESP)
+            return json_resp({"size": 1}, status=201)
+
+        seaweed = make_fs(handler)
+        assert await seaweed.upload_file(__file__) == FID
+        assert seen[0] == "http://localhost:9333/dir/assign"
+
+    async def test_upload_file_volume_post_wire_details(self) -> None:
+        captured: dict[str, Any] = {}
+
+        def handler(request: httpx.Request) -> httpx.Response:
+            if request.url.path == "/dir/assign":
+                return json_resp(ASSIGN_RESP)
+            captured["body"] = request.read()
+            captured["headers"] = request.headers
+            return json_resp({"size": 1}, status=201)
+
+        seaweed = make_fs(handler)
+        fid = await seaweed.upload_file(
+            __file__, name="up.bin", additional_headers={"X-Up": "yes"}, content_type="text/x-up"
+        )
+        assert fid == FID
+        body = captured["body"]
+        assert b'name="file"; filename="up.bin"' in body
+        assert b"Content-Type: text/x-up" in body
+        assert captured["headers"]["x-up"] == "yes"
+
+    async def test_upload_file_does_not_close_caller_stream(self) -> None:
+        stream = BytesIO(b"data")
+        seaweed = make_fs()
+        assert await seaweed.upload_file(stream=stream, name="x.bin") == FID
+        assert not stream.closed
 
     async def test_upload_file_post_fails(self) -> None:
         def handler(request: httpx.Request) -> httpx.Response:
@@ -414,7 +595,7 @@ class TestAsyncSeaweedFS:
             return httpx.Response(404)
 
         seaweed = make_fs(handler)
-        with pytest.raises(RuntimeError):
+        with pytest.raises(RuntimeError, match="Upload failed"):
             await seaweed.upload_file(__file__)
 
     async def test_submit_file(self) -> None:
@@ -434,6 +615,78 @@ class TestAsyncSeaweedFS:
         seaweed = make_fs()
         with pytest.raises(ValueError):
             await seaweed.submit_file()
+
+    async def test_submit_file_wire_details(self) -> None:
+        captured: dict[str, Any] = {}
+
+        def handler(request: httpx.Request) -> httpx.Response:
+            captured["url"] = str(request.url)
+            captured["body"] = request.read()
+            captured["headers"] = request.headers
+            return json_resp({"fid": FID, "size": 5}, status=201)
+
+        seaweed = make_fs(handler)
+        fid = await seaweed.submit_file(
+            stream=BytesIO(b"data"), name="s.bin", additional_headers={"X-Sub": "1"}, content_type="text/x-s"
+        )
+        assert fid == FID
+        assert captured["url"] == "http://localhost:9333/submit"
+        body = captured["body"]
+        assert b'name="file"; filename="s.bin"' in body
+        assert b"Content-Type: text/x-s" in body
+        assert captured["headers"]["x-sub"] == "1"
+
+    async def test_connection_defaults(self) -> None:
+        conn = AsyncConnection()
+        assert conn.retries == 0
+        assert conn.timeout is None
+        await conn.close()
+        conn = AsyncConnection(timeout=3.3)
+        assert conn._client.timeout.read == 3.3
+        await conn.close()
+
+    async def test_post_put_methods_on_wire(self) -> None:
+        methods: list[str] = []
+
+        def handler(request: httpx.Request) -> httpx.Response:
+            methods.append(request.method)
+            return httpx.Response(201)
+
+        conn = AsyncConnection(client=httpx.AsyncClient(transport=httpx.MockTransport(handler)))
+        await conn.post("http://x")
+        await conn.put("http://x")
+        assert methods == ["POST", "PUT"]
+        await conn.close()
+
+    async def test_stream_backoff_delays(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        delays: list[float] = []
+
+        async def record_sleep(d: float) -> None:
+            delays.append(d)
+
+        monkeypatch.setattr("pyseaweed.async_client.asyncio.sleep", record_sleep)
+        transport = httpx.MockTransport(lambda req: httpx.Response(503, content=b"err"))
+        conn = AsyncConnection(retries=2, client=httpx.AsyncClient(transport=transport))
+        chunks = [c async for c in conn.get_stream("http://x")]
+        assert chunks == []
+        assert delays == [0.3, 0.6]
+        await conn.close()
+
+    async def test_admin_queries_on_wire(self) -> None:
+        seen: list[str] = []
+
+        def handler(request: httpx.Request) -> httpx.Response:
+            seen.append(str(request.url))
+            if request.url.path == "/vol/grow":
+                return json_resp({"count": 1})
+            return httpx.Response(200, content=b"{}")
+
+        seaweed = make_fs(handler)
+        assert await seaweed.grow_volumes(3, collection="x")
+        assert "count=3" in seen[0]
+        assert "collection=x" in seen[0]
+        assert await seaweed.delete_collection("foo")
+        assert "collection=foo" in seen[1]
 
     async def test_vacuum(self) -> None:
         seaweed = make_fs()
@@ -519,3 +772,28 @@ def test_lazy_init_export_unknown_attr() -> None:
 
     with pytest.raises(AttributeError):
         pyseaweed.NonExistent  # noqa: B018
+
+
+class TestAsyncNegativePaths:
+    async def test_fid_format_edges(self) -> None:
+        seaweed = make_fs(dispatch([("/dir/lookup", json_resp({"locations": [VOLUME_RESP]}))]))
+        for fid in ("3,ABCD", "03,ab", "3,01637037d6.png", "3,ab.-_", " 3,ab "):
+            assert await seaweed.get_file_url(fid) is not None
+        for bad_fid in ("3,ab.txt.png", "3, ab", "3,ab,cd", "3,g", "3,0f-2_4"):
+            with pytest.raises(BadFidFormat):
+                await seaweed.get_file_url(bad_fid)
+        await seaweed.close()
+
+    async def test_upload_assign_malformed(self) -> None:
+        for data in (5, [], {"fid": ""}, {"fid": 123}, {"fid": FID}, {"fid": FID, "url": None}, {"fid": FID, "url": ""}, {"error": "no volumes"}):
+            seaweed = make_fs(dispatch([("/dir/assign", json_resp(data))]))
+            assert await seaweed.upload_file(__file__) is None
+
+    async def test_upload_missing_file(self) -> None:
+        with pytest.raises(FileNotFoundError):
+            await make_fs().upload_file("/nonexistent-path-xyz.txt")
+
+    async def test_submit_malformed_responses(self) -> None:
+        for data in (5, "x", [], {"fid": None}, {"fid": 123}, {}):
+            seaweed = make_fs(dispatch([("/submit", json_resp(data))]))
+            assert await seaweed.submit_file(__file__) is None
