@@ -5,8 +5,9 @@
 
 from __future__ import annotations
 
+from collections.abc import Iterator
 from types import ModuleType
-from typing import BinaryIO, Iterator
+from typing import BinaryIO
 
 import requests
 

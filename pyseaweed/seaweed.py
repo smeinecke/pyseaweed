@@ -8,7 +8,8 @@ from __future__ import annotations
 import json
 import os
 import random
-from typing import BinaryIO, Iterator, NamedTuple
+from collections.abc import Iterator
+from typing import BinaryIO, NamedTuple
 from urllib.parse import urlencode
 
 from pyseaweed.exceptions import BadFidFormat
