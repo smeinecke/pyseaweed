@@ -9,6 +9,7 @@ from pyseaweed.version import __version__
 
 if TYPE_CHECKING:
     from pyseaweed.async_client import AsyncSeaweedFS
+    from pyseaweed.async_filer import AsyncFiler
 
 WeedFS = SeaweedFS  # for backward compatibility
 
@@ -16,6 +17,7 @@ VERSION = __version__
 
 __all__ = [
     "VERSION",
+    "AsyncFiler",
     "AsyncSeaweedFS",
     "BadFidFormat",
     "FileLocation",
@@ -25,13 +27,18 @@ __all__ = [
     "__version__",
 ]
 
+_ASYNC_EXPORTS = {
+    "AsyncSeaweedFS": "pyseaweed.async_client",
+    "AsyncFiler": "pyseaweed.async_filer",
+}
+
 
 def __getattr__(name: str) -> object:
-    """Lazily expose AsyncSeaweedFS so httpx stays an optional dependency."""
-    if name == "AsyncSeaweedFS":
+    """Lazily expose the async clients so httpx stays an optional dependency."""
+    if name in _ASYNC_EXPORTS:
         try:
-            from pyseaweed.async_client import AsyncSeaweedFS
+            module = __import__(_ASYNC_EXPORTS[name], fromlist=[name])
+            return getattr(module, name)
         except ImportError as exc:
-            raise ImportError("AsyncSeaweedFS requires httpx. Install it with: pip install pyseaweed[async]") from exc
-        return AsyncSeaweedFS
+            raise ImportError(f"{name} requires httpx. Install it with: pip install pyseaweed[async]") from exc
     raise AttributeError(f"module {__name__!r} has no attribute {name!r}")

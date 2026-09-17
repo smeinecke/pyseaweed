@@ -8,6 +8,18 @@ from pyseaweed.version import __version__
 
 FID_PATTERN = re.compile(r"^(\d+),([0-9a-fA-F]+(?:\.[A-Za-z0-9_-]+)?)$")
 
+TAG_PREFIX = "Seaweed-"
+
+
+def canonical_tag_name(name: str) -> str:
+    """Return the canonical form SeaweedFS stores for a tag name.
+
+    Tags are sent as ``Seaweed-<name>`` HTTP headers, so the server
+    canonicalizes them like MIME header keys: ``color`` -> ``Color``,
+    ``my-tag`` -> ``My-Tag``.
+    """
+    return "-".join(part.capitalize() for part in name.split("-"))
+
 
 def prepare_headers(additional_headers: dict[str, str] | None = None) -> dict[str, str]:
     """Prepare headers for http communication.

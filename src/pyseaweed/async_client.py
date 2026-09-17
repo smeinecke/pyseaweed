@@ -249,6 +249,38 @@ class AsyncConnection:
             return res.text
         return None
 
+    async def post(self, url: str, timeout: float | None = None, additional_headers: dict[str, str] | None = None) -> bool:
+        """Send an empty POST request to the provided url.
+
+        Args:
+            url: Address to post to.
+            timeout: Optional request timeout in seconds.
+            additional_headers: Additional headers to be used
+                with the request.
+
+        Returns:
+            Boolean. True if request was successful. False if not.
+
+        """
+        res = await self._request("POST", url, timeout=timeout, additional_headers=additional_headers)
+        return res is not None and 200 <= res.status_code < 300
+
+    async def put(self, url: str, timeout: float | None = None, additional_headers: dict[str, str] | None = None) -> bool:
+        """Send an empty PUT request to the provided url.
+
+        Args:
+            url: Address to put to.
+            timeout: Optional request timeout in seconds.
+            additional_headers: Additional headers to be used
+                with the request.
+
+        Returns:
+            Boolean. True if request was successful. False if not.
+
+        """
+        res = await self._request("PUT", url, timeout=timeout, additional_headers=additional_headers)
+        return res is not None and 200 <= res.status_code < 300
+
     async def delete_data(self, url: str, timeout: float | None = None, additional_headers: dict[str, str] | None = None) -> bool:
         """Delete data under provided url.
 

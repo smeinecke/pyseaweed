@@ -1,63 +1,67 @@
-"""Client for the SeaweedFS Filer HTTP API.
+"""Async client for the SeaweedFS Filer HTTP API.
 
-The filer exposes a path-based file interface on top of the volume
-storage (default port 8888): upload, download, directory listing,
-mkdir, move, delete and extended-attribute tagging.
+Async variant of :class:`pyseaweed.filer.Filer` based on httpx.
+Requires the ``async`` extra::
+
+    pip install pyseaweed[async]
+
 """
 
 import base64
 import json
-from collections.abc import Iterable, Iterator
+from collections.abc import AsyncIterator, Iterable
 from typing import Any, BinaryIO, Self
 from urllib.parse import urlencode
 
+import httpx
+
 from pyseaweed._common import TAG_PREFIX, canonical_tag_name, prepare_stream, range_headers
-from pyseaweed.utils import Connection
+from pyseaweed.async_client import AsyncConnection
 
 
-class Filer:
-    """Client for the SeaweedFS Filer HTTP API (path-based access)."""
+class AsyncFiler:
+    """Async client for the SeaweedFS Filer HTTP API (path-based access)."""
 
     def __init__(
         self,
         filer_addr: str = "localhost",
         filer_port: int = 8888,
-        use_session: bool = False,
         timeout: float | None = None,
         retries: int = 0,
+        client: httpx.AsyncClient | None = None,
     ) -> None:
-        """Create a Filer instance.
+        """Create an AsyncFiler instance.
 
         Args:
             filer_addr: Address of the SeaweedFS filer server
                 (default: localhost).
             filer_port: SeaweedFS filer port (default: 8888).
-            use_session: Use ``requests.Session()`` for connections instead of
-                plain ``requests`` calls (default: False).
             timeout: Default request timeout in seconds (default: None,
                 i.e. no timeout).
             retries: Number of retries for transient server errors
-                (default: 0). Implies ``use_session`` when > 0.
+                (default: 0).
+            client: Optional pre-configured ``httpx.AsyncClient`` to use
+                instead of creating one.
 
         Returns:
-            Filer instance.
+            AsyncFiler instance.
 
         """
         self.filer_addr = filer_addr
         self.filer_port = filer_port
-        self.conn = Connection(use_session, timeout=timeout, retries=retries)
+        self.conn = AsyncConnection(timeout=timeout, retries=retries, client=client)
 
-    def close(self) -> None:
-        """Close the underlying session, if any."""
-        self.conn.close()
+    async def close(self) -> None:
+        """Close the underlying http client."""
+        await self.conn.close()
 
-    def __enter__(self) -> Self:
-        """Return self for context manager usage."""
+    async def __aenter__(self) -> Self:
+        """Return self for async context manager usage."""
         return self
 
-    def __exit__(self, exc_type: object, exc_val: object, exc_tb: object) -> None:
-        """Close the underlying session on context manager exit."""
-        self.close()
+    async def __aexit__(self, exc_type: object, exc_val: object, exc_tb: object) -> None:
+        """Close the http client on context manager exit."""
+        await self.close()
 
     def __repr__(self) -> str:
         """Return string representation of the instance."""
@@ -72,7 +76,7 @@ class Filer:
             url += f"?{urlencode(params)}"
         return url
 
-    def upload_file(
+    async def upload_file(
         self,
         remote_path: str,
         path: str | None = None,
@@ -108,7 +112,7 @@ class Filer:
         """
         filename, file_stream, close_stream = prepare_stream(path, stream, name)
         try:
-            res = self.conn.post_file(
+            res = await self.conn.post_file(
                 self._url(remote_path, kwargs or None), filename, file_stream, additional_headers=additional_headers, content_type=content_type
             )
         finally:
@@ -125,7 +129,7 @@ class Filer:
             return data
         raise RuntimeError(f"Upload failed: {data}")
 
-    def download_file(
+    async def download_file(
         self,
         remote_path: str,
         byte_range: tuple[int | None, int | None] | None = None,
@@ -143,16 +147,16 @@ class Filer:
             File content as bytes or None if the file doesn't exist.
 
         """
-        return self.conn.get_raw_data(self._url(remote_path, params), additional_headers=range_headers(byte_range))
+        return await self.conn.get_raw_data(self._url(remote_path, params), additional_headers=range_headers(byte_range))
 
-    def get_file_stream(
+    async def get_file_stream(
         self,
         remote_path: str,
         byte_range: tuple[int | None, int | None] | None = None,
         params: dict[str, str] | None = None,
         chunk_size: int = 8192,
-    ) -> Iterator[bytes] | None:
-        """Download a file from the filer as a stream of chunks.
+    ) -> AsyncIterator[bytes]:
+        """Download a file from the filer as an async stream of chunks.
 
         Args:
             remote_path: Path of the file on the filer.
@@ -162,12 +166,13 @@ class Filer:
             chunk_size: Size of the chunks yielded by the iterator.
 
         Returns:
-            Iterator of file chunks or None if the file doesn't exist.
+            Async iterator of file chunks. The iterator is empty if the
+            file doesn't exist or the request fails.
 
         """
         return self.conn.get_stream(self._url(remote_path, params), additional_headers=range_headers(byte_range), chunk_size=chunk_size)
 
-    def exists(self, remote_path: str) -> bool:
+    async def exists(self, remote_path: str) -> bool:
         """Check whether a file or directory exists on the filer.
 
         Args:
@@ -177,9 +182,9 @@ class Filer:
             True if the path exists. False otherwise.
 
         """
-        return self.conn.head(self._url(remote_path)) is not None
+        return await self.conn.head(self._url(remote_path)) is not None
 
-    def stat(self, remote_path: str) -> dict[str, Any] | None:
+    async def stat(self, remote_path: str) -> dict[str, Any] | None:
         """Get metadata for a file or directory.
 
         Args:
@@ -191,14 +196,14 @@ class Filer:
             exist.
 
         """
-        res = self.conn.get_data(self._url(remote_path, {"metadata": "true"}))
+        res = await self.conn.get_data(self._url(remote_path, {"metadata": "true"}))
         try:
             data = json.loads(res) if res else None
         except ValueError:
             return None
         return data if isinstance(data, dict) else None
 
-    def list_dir(
+    async def list_dir(
         self,
         dir_path: str,
         limit: int | None = None,
@@ -225,14 +230,14 @@ class Filer:
         if last_file_name is not None:
             params["lastFileName"] = last_file_name
         path = dir_path.rstrip("/") + "/"
-        res = self.conn.get_data(self._url(path, params or None), additional_headers={"Accept": "application/json"})
+        res = await self.conn.get_data(self._url(path, params or None), additional_headers={"Accept": "application/json"})
         try:
             data = json.loads(res) if res else None
         except ValueError:
             return None
         return data if isinstance(data, dict) else None
 
-    def mkdir(self, dir_path: str) -> bool:
+    async def mkdir(self, dir_path: str) -> bool:
         """Create a directory, including missing parents.
 
         Args:
@@ -242,9 +247,9 @@ class Filer:
             True if the directory was created. False otherwise.
 
         """
-        return self.conn.post(self._url(dir_path.rstrip("/") + "/", {"mode": "mkdir"}))
+        return await self.conn.post(self._url(dir_path.rstrip("/") + "/", {"mode": "mkdir"}))
 
-    def move(self, src_path: str, dst_path: str) -> bool:
+    async def move(self, src_path: str, dst_path: str) -> bool:
         """Move or rename a file or directory.
 
         Args:
@@ -255,9 +260,9 @@ class Filer:
             True if the entry was moved. False otherwise.
 
         """
-        return self.conn.post(self._url(dst_path, {"mv.from": src_path}))
+        return await self.conn.post(self._url(dst_path, {"mv.from": src_path}))
 
-    def delete(
+    async def delete(
         self,
         remote_path: str,
         recursive: bool = False,
@@ -281,9 +286,9 @@ class Filer:
             params["recursive"] = "true"
         if ignore_recursive_error:
             params["ignoreRecursiveError"] = "true"
-        return self.conn.delete_data(self._url(remote_path, params or None))
+        return await self.conn.delete_data(self._url(remote_path, params or None))
 
-    def set_tags(self, remote_path: str, tags: dict[str, str]) -> bool:
+    async def set_tags(self, remote_path: str, tags: dict[str, str]) -> bool:
         """Set or replace extended attributes (tags) on a file.
 
         Tag names are stored in canonical header form, e.g. ``color``
@@ -298,9 +303,9 @@ class Filer:
 
         """
         headers = {f"{TAG_PREFIX}{name}": str(value) for name, value in tags.items()}
-        return self.conn.put(self._url(remote_path, {"tagging": ""}), additional_headers=headers)
+        return await self.conn.put(self._url(remote_path, {"tagging": ""}), additional_headers=headers)
 
-    def get_tags(self, remote_path: str) -> dict[str, str] | None:
+    async def get_tags(self, remote_path: str) -> dict[str, str] | None:
         """Get the extended attributes (tags) of a file.
 
         Tag names are returned in canonical header form (e.g.
@@ -314,7 +319,7 @@ class Filer:
             path doesn't exist.
 
         """
-        meta = self.stat(remote_path)
+        meta = await self.stat(remote_path)
         if meta is None:
             return None
         extended = meta.get("Extended")
@@ -329,7 +334,7 @@ class Filer:
                     tags[key[len(TAG_PREFIX) :]] = value
         return tags
 
-    def delete_tags(self, remote_path: str, names: Iterable[str] | None = None) -> bool:
+    async def delete_tags(self, remote_path: str, names: Iterable[str] | None = None) -> bool:
         """Delete extended attributes (tags) from a file.
 
         Args:
@@ -343,4 +348,4 @@ class Filer:
 
         """
         tagging = "" if names is None else ",".join(canonical_tag_name(name) for name in names)
-        return self.conn.delete_data(self._url(remote_path, {"tagging": tagging}))
+        return await self.conn.delete_data(self._url(remote_path, {"tagging": tagging}))
