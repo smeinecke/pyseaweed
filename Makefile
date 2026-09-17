@@ -1,6 +1,6 @@
 # Makefile
 
-.PHONY: all format reformat-ruff check fix-ruff fix test test-cov test-integration test-all weed-up weed-down test-integration-local vulture complexity xenon bandit pyright docs validate
+.PHONY: all format reformat-ruff check fix-ruff fix test test-cov test-integration test-all weed-up weed-down test-integration-local vulture complexity xenon bandit pyright docs validate mutation
 
 # Default target: runs format and check
 all: validate test
@@ -56,6 +56,11 @@ weed-down:
 
 test-integration-local: weed-up
 	@uv run pytest tests/integration -v -m integration --timeout=120; status=$$?; $(MAKE) weed-down; exit $$status
+
+# Mutation testing (mutates src/, runs the unit suite per mutant)
+mutation:
+	uv run mutmut run
+	uv run mutmut results
 
 vulture:
 	uv run vulture . --exclude .venv,tests,docs --make-whitelist

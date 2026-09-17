@@ -31,6 +31,9 @@ Changelog
       optional extension)
     - CI: unit tests now run on Python 3.13 and 3.14; release builds
       are attested with build provenance
+    - Testing: mutation testing with mutmut (``make mutation``, weekly
+      CI), transport-level fault-injection tests, live fault injection
+      via toxiproxy, and expanded negative-path coverage
 
 -------
 3.0.0

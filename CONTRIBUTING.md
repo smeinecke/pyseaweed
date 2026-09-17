@@ -27,6 +27,23 @@ Integration tests run against a live SeaweedFS in Docker:
 make test-integration-local   # starts container, runs tests, removes container
 ```
 
+`weed-up` also starts a toxiproxy sidecar (admin API on :8474, proxies
+on :29333 -> master and :28888 -> filer) used by the live
+fault-injection tests in `tests/integration/test_fault_injection.py`.
+
+## Mutation testing
+
+Mutation testing with mutmut is available but not part of the PR gate —
+it runs weekly in CI and on demand:
+
+```bash
+make mutation   # mutates src/, runs the unit suite per mutant
+```
+
+`mutmut results` lists surviving mutants; `mutmut browse` inspects them.
+New code should kill its mutants — add tests or mark intentional
+survivors with `# pragma: no mutate`.
+
 ## Pull requests
 
 - Keep changes in logically grouped commits.
