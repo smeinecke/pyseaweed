@@ -8,6 +8,8 @@ Class to simplify communication with Seaweed-FS_
 Installation
 ============
 
+Requires Python 3.13 or later.
+
 From PyPI::
 
     pip install pyseaweed
@@ -86,4 +88,4 @@ Cluster administration and status
     w.version                     # master version string
 
 
-.. _Weed-FS: https://github.com/chrislusf/seaweedfs
+.. _Seaweed-FS: https://github.com/chrislusf/seaweedfs

@@ -6,6 +6,9 @@ Changelog
 2.1.0
 -------
 
+    - **Require Python 3.13+** (dropped Python 3.9 - 3.12)
+    - Restructure to ``src`` layout, build with hatchling, ship
+      ``py.typed`` marker (PEP 561)
     - Add ``get_file_stream`` for chunked downloads without buffering
       the whole file in memory
     - Add ``byte_range`` support (HTTP Range requests) and read query

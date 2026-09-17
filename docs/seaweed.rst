@@ -1,14 +1,19 @@
 ===============
-WeedFS
+SeaweedFS
 ===============
 
 .. automodule:: pyseaweed.seaweed
+
+.. autoclass:: pyseaweed.seaweed.SeaweedFS
     :members:
 
-    .. autoclass:: SeaweedFS
-        :members:
+    .. automethod:: __init__
 
-        .. automethod:: __init__
+.. autoclass:: pyseaweed.seaweed.FileLocation
+    :members:
+
+.. autoexception:: pyseaweed.exceptions.BadFidFormat
+    :members:
 
 
 ===============

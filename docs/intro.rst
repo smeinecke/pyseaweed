@@ -99,4 +99,4 @@ Cluster administration and status
     w.version                     # master version string
 
 
-.. _Weed-FS: https://github.com/chrislusf/seaweedfs
+.. _Seaweed-FS: https://github.com/chrislusf/seaweedfs
