@@ -140,5 +140,19 @@ Filer (path-based file access on the SeaweedFS filer, port 8888)
         f.get_tags("/docs/archive/report.pdf")   # {"Kind": "report"}
         f.delete("/docs/archive", recursive=True)
 
+AsyncFiler (async variant of ``Filer``, requires
+``pip install "pyseaweed[async]"``)
+
+.. code-block:: python
+
+    from pyseaweed import AsyncFiler
+
+    async with AsyncFiler("localhost", 8888) as f:
+        await f.upload_file("/docs/report.pdf", "report.pdf")
+        content = await f.download_file("/docs/report.pdf")
+        async for chunk in await f.get_file_stream("/docs/report.pdf"):
+            ...
+        await f.delete("/docs", recursive=True)
+
 
 .. _Seaweed-FS: https://github.com/chrislusf/seaweedfs

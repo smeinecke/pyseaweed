@@ -42,6 +42,11 @@ Requires the ``async`` extra (``pip install "pyseaweed[async]"``).
 .. autoclass:: pyseaweed.async_client.AsyncConnection
     :members:
 
+.. autoclass:: pyseaweed.async_filer.AsyncFiler
+    :members:
+
+    .. automethod:: __init__
+
 
 ===============
 Utils

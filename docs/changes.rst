@@ -12,7 +12,12 @@ Changelog
       pagination, ``mkdir``, ``move``, ``delete`` (``recursive``),
       and extended-attribute tagging via ``set_tags``, ``get_tags``
       and ``delete_tags``
-    - Add ``Connection.post`` and ``Connection.put`` helpers
+    - Add ``AsyncFiler``, an async variant of ``Filer`` mirroring the
+      full filer API on top of httpx. Available as
+      ``from pyseaweed import AsyncFiler`` or
+      ``from pyseaweed.async_filer import AsyncFiler``
+    - Add ``Connection.post`` and ``Connection.put`` helpers (and the
+      async equivalents)
     - Add ``AsyncSeaweedFS``, an async client mirroring the full
       ``SeaweedFS`` API on top of httpx. Install with
       ``pip install "pyseaweed[async]"``. Available as
