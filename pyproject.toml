@@ -86,7 +86,14 @@ markers = [
 ]
 
 [tool.pyright]
+typeCheckingMode = "strict"
 pythonVersion = "3.13"
+reportUnknownVariableType = false
+reportUnknownMemberType = false
+reportUnknownArgumentType = false
+reportUnknownLambdaType = false
+reportMissingTypeStubs = false
+reportPrivateUsage = false
 exclude = ["**/__pycache__", "**/node_modules", "**/dist", "**/build", "**/venv", "**/.venv", "docs"]
 
 [tool.bandit]

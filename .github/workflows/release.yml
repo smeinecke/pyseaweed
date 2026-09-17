@@ -12,6 +12,8 @@ jobs:
     runs-on: ubuntu-latest
     permissions:
       contents: read
+      id-token: write
+      attestations: write
 
     steps:
       - uses: actions/checkout@v7
@@ -34,6 +36,11 @@ jobs:
 
       - name: List dist files
         run: ls -lh dist/
+
+      - name: Attest build provenance
+        uses: actions/attest-build-provenance@v3
+        with:
+          subject-path: dist/*
 
       - name: Upload dist artifacts
         uses: actions/upload-artifact@v7
