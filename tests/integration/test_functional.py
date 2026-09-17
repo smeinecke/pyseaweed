@@ -141,6 +141,12 @@ class FunctionalTests(unittest.TestCase):
         self.assertIsNone(self.seaweed.get_file_location(fid.split(",")[0], collection="no-such-collection"))
         self.assertTrue(self.seaweed.delete_file(fid))
 
+    def test_submit_file(self) -> None:
+        fid = self.seaweed.submit_file(stream=io.BytesIO(b"submit-data"), name="submit.bin")
+        assert fid is not None
+        self.assertEqual(self.seaweed.get_file(fid), b"submit-data")
+        self.assertTrue(self.seaweed.delete_file(fid))
+
     def test_get_wrong_file(self) -> None:
         file_content = self.seaweed.get_file("3,123456790")
         self.assertIsNone(file_content)
@@ -269,6 +275,12 @@ class FunctionalTestsSession(unittest.TestCase):
         loc = self.seaweed.get_file_location(fid.split(",")[0], collection="")
         self.assertIsNotNone(loc)
         self.assertIsNone(self.seaweed.get_file_location(fid.split(",")[0], collection="no-such-collection"))
+        self.assertTrue(self.seaweed.delete_file(fid))
+
+    def test_submit_file(self) -> None:
+        fid = self.seaweed.submit_file(stream=io.BytesIO(b"submit-data"), name="submit.bin")
+        assert fid is not None
+        self.assertEqual(self.seaweed.get_file(fid), b"submit-data")
         self.assertTrue(self.seaweed.delete_file(fid))
 
     def test_get_wrong_file(self) -> None:

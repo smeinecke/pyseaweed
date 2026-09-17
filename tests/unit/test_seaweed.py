@@ -426,6 +426,26 @@ class SeaweedFSTests(unittest.TestCase):
         with HTTMock(mock):
             self.assertIsNone(self.seaweed.upload_file(__file__))
 
+    def test_submit_file(self) -> None:
+        resp = {"fid": FID, "fileName": "test.py", "fileUrl": f"vol.local:8080/{FID}", "size": 123}
+        mock = dispatch([("/submit", json_resp(resp, status=201))])
+        with HTTMock(mock):
+            self.assertEqual(self.seaweed.submit_file(__file__), FID)
+            with open(__file__, "rb") as f:
+                self.assertEqual(self.seaweed.submit_file(stream=f, name="test.py"), FID)
+
+    def test_submit_file_errors(self) -> None:
+        with HTTMock(dispatch([("/submit", {"status_code": 500, "content": b"err"})])):
+            self.assertIsNone(self.seaweed.submit_file(__file__))
+        with HTTMock(dispatch([("/submit", {"status_code": 201, "content": b"not json"})])):
+            self.assertIsNone(self.seaweed.submit_file(__file__))
+        with HTTMock(dispatch([("/submit", json_resp([1, 2], status=201))])):
+            self.assertIsNone(self.seaweed.submit_file(__file__))
+        with HTTMock(dispatch([("/submit", json_resp({"size": 1}, status=201))])):
+            self.assertIsNone(self.seaweed.submit_file(__file__))
+        with self.assertRaises(ValueError):
+            self.seaweed.submit_file()
+
     def test_vacuum(self) -> None:
         with HTTMock(FULL):
             self.assertTrue(self.seaweed.vacuum())
