@@ -1,9 +1,4 @@
-# vi:si:et:sw=4:sts=4:ts=4
-
-
 """Main PySeaweed module. Contains SeaweedFS class."""
-
-from __future__ import annotations
 
 import json
 import os

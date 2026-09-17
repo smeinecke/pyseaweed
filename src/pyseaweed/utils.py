@@ -1,13 +1,8 @@
-# vi:si:et:sw=4:sts=4:ts=4
-
-
 """Helper module that contains functions to ease communication with seaweedfs."""
-
-from __future__ import annotations
 
 from collections.abc import Iterator
 from types import ModuleType
-from typing import BinaryIO
+from typing import BinaryIO, Self
 
 import requests
 
@@ -36,7 +31,7 @@ class Connection:
         if isinstance(self._conn, requests.Session):
             self._conn.close()
 
-    def __enter__(self) -> Connection:
+    def __enter__(self) -> Self:
         """Return self for context manager usage."""
         return self
 
