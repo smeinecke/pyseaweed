@@ -62,7 +62,10 @@ class Connection:
             Response object or None if the request failed.
 
         """
-        res = self._conn.head(url, headers=self._prepare_headers(additional_headers), timeout=timeout)
+        try:
+            res = self._conn.head(url, headers=self._prepare_headers(additional_headers), timeout=timeout)
+        except requests.RequestException:
+            return None
         if res.status_code == 200:
             return res
         return None
@@ -82,7 +85,10 @@ class Connection:
             Response body as string or None if the request failed.
 
         """
-        res = self._conn.get(url, headers=self._prepare_headers(additional_headers), timeout=timeout)
+        try:
+            res = self._conn.get(url, headers=self._prepare_headers(additional_headers), timeout=timeout)
+        except requests.RequestException:
+            return None
         if res.status_code == 200:
             return res.text
         else:
@@ -104,7 +110,10 @@ class Connection:
             Response body as bytes or None if the request failed.
 
         """
-        res = self._conn.get(url, headers=self._prepare_headers(additional_headers), timeout=timeout)
+        try:
+            res = self._conn.get(url, headers=self._prepare_headers(additional_headers), timeout=timeout)
+        except requests.RequestException:
+            return None
         if res.status_code == 200:
             return res.content
         else:
@@ -134,12 +143,15 @@ class Connection:
             Response body as string or None if the request failed.
 
         """
-        res = self._conn.post(
-            url,
-            files={"file": (filename, file_stream) if content_type is None else (filename, file_stream, content_type)},
-            headers=self._prepare_headers(additional_headers),
-            timeout=timeout,
-        )
+        try:
+            res = self._conn.post(
+                url,
+                files={"file": (filename, file_stream) if content_type is None else (filename, file_stream, content_type)},
+                headers=self._prepare_headers(additional_headers),
+                timeout=timeout,
+            )
+        except requests.RequestException:
+            return None
         if res.status_code == 200 or res.status_code == 201:
             return res.text
         else:
@@ -158,7 +170,10 @@ class Connection:
             Boolean. True if request was successful. False if not.
 
         """
-        res = self._conn.delete(url, headers=self._prepare_headers(additional_headers), timeout=timeout)
+        try:
+            res = self._conn.delete(url, headers=self._prepare_headers(additional_headers), timeout=timeout)
+        except requests.RequestException:
+            return False
         if res.status_code == 200 or res.status_code == 202:
             return True
         else:

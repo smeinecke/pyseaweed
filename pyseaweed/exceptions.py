@@ -19,4 +19,4 @@ class BadFidFormat(Exception):
 
     def __str__(self) -> str:
         """Return string representation of the exception."""
-        return repr(self.value)
+        return str(self.value)

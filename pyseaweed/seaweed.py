@@ -119,12 +119,17 @@ class SeaweedFS:
         """
         url = f"http://{self.master_addr}:{self.master_port}/dir/lookup?volumeId={volume_id}"
         res = self.conn.get_data(url)
-        data = json.loads(res) if res else {}
-        locations = data.get("locations") or []
-        if not locations:
+        try:
+            data = json.loads(res) if res else {}
+        except ValueError:
             return None
-        _file_location = random.choice(locations)
-        return FileLocation(_file_location["publicUrl"], _file_location["url"])
+        locations = data.get("locations") if isinstance(data, dict) else None
+        if not isinstance(locations, list) or not locations:
+            return None
+        location = random.choice(locations)
+        if not isinstance(location, dict) or "url" not in location:
+            return None
+        return FileLocation(location.get("publicUrl") or location["url"], location["url"])
 
     def get_file_size(self, fid: str) -> int | None:
         """Get size of uploaded file on SeaweedFS volume.
@@ -158,7 +163,10 @@ class SeaweedFS:
             True if file exists. False if not.
 
         """
-        return self.get_file_size(fid) is not None
+        url = self.get_file_url(fid)
+        if url is None:
+            return False
+        return self.conn.head(url) is not None
 
     def delete_file(self, fid: str) -> bool:
         """Delete file from SeaweedFS.
@@ -207,29 +215,47 @@ class SeaweedFS:
             RuntimeError: If the volume server rejects the upload.
 
         """
-        params = urlencode(kwargs)
-        query = f"?{params}" if params else ""
-        url = f"http://{self.master_addr}:{self.master_port}/dir/assign{query}"
-        res = self.conn.get_data(url)
-        data = json.loads(res) if res else {}
-        if data.get("error") is not None or "fid" not in data:
-            return None
-        key = "publicUrl" if self.use_public_url else "url"
-        post_url = f"http://{data[key]}/{data['fid']}{query}"
-
+        # we have file like object and filename
+        close_stream = False
         if path is not None:
             filename = os.path.basename(path) if name is None else name
-            with open(path, "rb") as file_stream:
-                res = self.conn.post_file(post_url, filename, file_stream, additional_headers=additional_headers, content_type=content_type)
-        # we have file like object and filename
+            file_stream = open(path, "rb")
+            close_stream = True
         elif stream is not None and name is not None:
-            res = self.conn.post_file(post_url, name, stream, additional_headers=additional_headers, content_type=content_type)
+            filename = name
+            file_stream = stream
         else:
             raise ValueError("If `path` is None then *both* `stream` and `name` must not be None")
+
+        try:
+            params = urlencode(kwargs)
+            query = f"?{params}" if params else ""
+            url = f"http://{self.master_addr}:{self.master_port}/dir/assign{query}"
+            res = self.conn.get_data(url)
+            try:
+                data = json.loads(res) if res else {}
+            except ValueError:
+                data = {}
+            if not isinstance(data, dict) or data.get("error") is not None or "fid" not in data:
+                return None
+            key = "publicUrl" if self.use_public_url else "url"
+            volume_url = data.get(key)
+            if not volume_url:
+                return None
+            post_url = f"http://{volume_url}/{data['fid']}{query}"
+
+            res = self.conn.post_file(post_url, filename, file_stream, additional_headers=additional_headers, content_type=content_type)
+        finally:
+            if close_stream:
+                file_stream.close()
+
         if res is None:
             return None
-        response_data = json.loads(res)
-        if "size" in response_data:
+        try:
+            response_data = json.loads(res)
+        except ValueError:
+            response_data = {}
+        if isinstance(response_data, dict) and "size" in response_data:
             return data.get("fid")
 
         raise RuntimeError(f"Upload failed: {response_data}")
@@ -258,7 +284,12 @@ class SeaweedFS:
         """
         url = f"http://{self.master_addr}:{self.master_port}/dir/status"
         data = self.conn.get_data(url)
-        response_data = json.loads(data) if data else {}
+        try:
+            response_data = json.loads(data) if data else {}
+        except ValueError:
+            response_data = {}
+        if not isinstance(response_data, dict):
+            return None
         return response_data.get("Version")
 
 
