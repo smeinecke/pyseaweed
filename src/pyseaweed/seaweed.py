@@ -4,7 +4,7 @@ import json
 import os
 import random
 from collections.abc import Iterator
-from typing import Any, BinaryIO, NamedTuple
+from typing import Any, BinaryIO, NamedTuple, Self
 from urllib.parse import urlencode
 
 from pyseaweed.exceptions import BadFidFormat
@@ -27,6 +27,7 @@ class SeaweedFS:
         master_port: int = 9333,
         use_session: bool = False,
         use_public_url: bool = True,
+        timeout: float | None = None,
     ) -> None:
         """Create a SeaweedFS instance.
 
@@ -38,6 +39,8 @@ class SeaweedFS:
                 plain ``requests`` calls (default: False).
             use_public_url: If ``True``, all the requests will use
                 ``publicUrl`` link instead of ``url``.
+            timeout: Default request timeout in seconds (default: None,
+                i.e. no timeout).
 
         Returns:
             SeaweedFS instance.
@@ -45,8 +48,20 @@ class SeaweedFS:
         """
         self.master_addr = master_addr
         self.master_port = master_port
-        self.conn = Connection(use_session)
+        self.conn = Connection(use_session, timeout=timeout)
         self.use_public_url = use_public_url
+
+    def close(self) -> None:
+        """Close the underlying session, if any."""
+        self.conn.close()
+
+    def __enter__(self) -> Self:
+        """Return self for context manager usage."""
+        return self
+
+    def __exit__(self, exc_type: object, exc_val: object, exc_tb: object) -> None:
+        """Close the underlying session on context manager exit."""
+        self.close()
 
     def __repr__(self) -> str:
         """Return string representation of the instance."""
@@ -58,9 +73,9 @@ class SeaweedFS:
 
         Either bound may be None to leave it open (e.g. ``(None, 500)``
         requests the last 500 bytes, ``(100, None)`` requests from byte
-        100 to the end).
+        100 to the end). ``(None, None)`` is treated like no range.
         """
-        if byte_range is None:
+        if byte_range is None or byte_range == (None, None):
             return None
         start, end = byte_range
         return {"Range": f"bytes={'' if start is None else start}-{'' if end is None else end}"}
@@ -70,6 +85,7 @@ class SeaweedFS:
         fid: str,
         byte_range: tuple[int | None, int | None] | None = None,
         params: dict[str, str] | None = None,
+        collection: str | None = None,
     ) -> bytes | None:
         """Get file from SeaweedFS.
 
@@ -84,6 +100,8 @@ class SeaweedFS:
             params: Optional query parameters for the volume request
                 (e.g. ``width``/``height``/``mode`` for image resizing or
                 ``readDeleted`` to read deleted files).
+            collection: Optional collection name to speed up the volume
+                lookup on the master.
 
         Returns:
             Content of the file with provided fid or None if file doesn't
@@ -94,7 +112,7 @@ class SeaweedFS:
                 ``<volume_id>,<file_name_hash>`` format.
 
         """
-        url = self.get_file_url(fid, params=params)
+        url = self.get_file_url(fid, params=params, collection=collection)
         if url is None:
             return None
         return self.conn.get_raw_data(url, additional_headers=self._range_headers(byte_range))
@@ -104,6 +122,7 @@ class SeaweedFS:
         fid: str,
         byte_range: tuple[int | None, int | None] | None = None,
         params: dict[str, str] | None = None,
+        collection: str | None = None,
         chunk_size: int = 8192,
     ) -> Iterator[bytes] | None:
         """Get file from SeaweedFS as a stream of chunks.
@@ -115,6 +134,8 @@ class SeaweedFS:
             byte_range: Optional ``(start, end)`` tuple for a HTTP range
                 request. Either bound may be None to leave it open.
             params: Optional query parameters for the volume request.
+            collection: Optional collection name to speed up the volume
+                lookup on the master.
             chunk_size: Size of the chunks yielded by the iterator.
 
         Returns:
@@ -126,12 +147,18 @@ class SeaweedFS:
                 ``<volume_id>,<file_name_hash>`` format.
 
         """
-        url = self.get_file_url(fid, params=params)
+        url = self.get_file_url(fid, params=params, collection=collection)
         if url is None:
             return None
         return self.conn.get_stream(url, additional_headers=self._range_headers(byte_range), chunk_size=chunk_size)
 
-    def get_file_url(self, fid: str, public: bool | None = None, params: dict[str, str] | None = None) -> str | None:
+    def get_file_url(
+        self,
+        fid: str,
+        public: bool | None = None,
+        params: dict[str, str] | None = None,
+        collection: str | None = None,
+    ) -> str | None:
         """Get url for the file.
 
         Args:
@@ -141,6 +168,8 @@ class SeaweedFS:
             params: Optional query parameters appended to the file url
                 (e.g. ``width``/``height``/``mode``/crop parameters for
                 server-side image resizing or ``readDeleted``).
+            collection: Optional collection name to speed up the volume
+                lookup on the master.
 
         Returns:
             File url as string or None if the volume can't be located.
@@ -155,7 +184,7 @@ class SeaweedFS:
             volume_id, _ = fid.split(",")
         except ValueError:
             raise BadFidFormat("fid must be in format: <volume_id>,<file_name_hash>")
-        file_location = self.get_file_location(volume_id)
+        file_location = self.get_file_location(volume_id, collection=collection)
         if file_location is None:
             return None
         if public is None:
@@ -199,13 +228,15 @@ class SeaweedFS:
         location = random.choice(valid)
         return FileLocation(location.get("publicUrl") or location["url"], location["url"])
 
-    def get_file_size(self, fid: str) -> int | None:
+    def get_file_size(self, fid: str, collection: str | None = None) -> int | None:
         """Get size of uploaded file on SeaweedFS volume.
 
         For some type of files Gzip Compression might be applied.
 
         Args:
             fid: File identifier ``<volume_id>,<file_name_hash>``.
+            collection: Optional collection name to speed up the volume
+                lookup on the master.
 
         Returns:
             Size in bytes or None if file doesn't exist.
@@ -215,7 +246,7 @@ class SeaweedFS:
                 ``<volume_id>,<file_name_hash>`` format.
 
         """
-        url = self.get_file_url(fid)
+        url = self.get_file_url(fid, collection=collection)
         if url is None:
             return None
         res = self.conn.head(url)
@@ -228,11 +259,13 @@ class SeaweedFS:
                     return None
         return None
 
-    def file_exists(self, fid: str) -> bool:
+    def file_exists(self, fid: str, collection: str | None = None) -> bool:
         """Check if file with provided fid exists.
 
         Args:
             fid: File identifier ``<volume_id>,<file_name_hash>``.
+            collection: Optional collection name to speed up the volume
+                lookup on the master.
 
         Returns:
             True if file exists. False if not.
@@ -242,16 +275,18 @@ class SeaweedFS:
                 ``<volume_id>,<file_name_hash>`` format.
 
         """
-        url = self.get_file_url(fid)
+        url = self.get_file_url(fid, collection=collection)
         if url is None:
             return False
         return self.conn.head(url) is not None
 
-    def delete_file(self, fid: str) -> bool:
+    def delete_file(self, fid: str, collection: str | None = None) -> bool:
         """Delete file from SeaweedFS.
 
         Args:
             fid: File identifier ``<volume_id>,<file_name_hash>``.
+            collection: Optional collection name to speed up the volume
+                lookup on the master.
 
         Returns:
             True if file was deleted. False otherwise.
@@ -261,7 +296,7 @@ class SeaweedFS:
                 ``<volume_id>,<file_name_hash>`` format.
 
         """
-        url = self.get_file_url(fid)
+        url = self.get_file_url(fid, collection=collection)
         if url is None:
             return False
         return self.conn.delete_data(url)
@@ -314,7 +349,7 @@ class SeaweedFS:
             volume_url = data.get(key) or data.get("url")
             if not volume_url:
                 return None
-            post_url = f"http://{volume_url}/{data['fid']}{query}"
+            post_url = f"http://{volume_url}/{data['fid']}"
 
             res = self.conn.post_file(post_url, filename, file_stream, additional_headers=additional_headers, content_type=content_type)
         finally:
@@ -481,11 +516,16 @@ class SeaweedFS:
         url = f"http://{self.master_addr}:{self.master_port}/vol/status"
         return self._get_json(url)
 
-    def volume_server_status(self, fid: str) -> dict[str, Any] | None:
+    def volume_server_status(self, fid: str, collection: str | None = None) -> dict[str, Any] | None:
         """Get the status of the volume server holding the given fid.
+
+        The internal volume url is used because ``/status`` is an
+        administrative endpoint that may not be exposed publicly.
 
         Args:
             fid: File identifier ``<volume_id>,<file_name_hash>``.
+            collection: Optional collection name to speed up the volume
+                lookup on the master.
 
         Returns:
             Volume server status dict (version, volumes, disk stats) or
@@ -496,7 +536,7 @@ class SeaweedFS:
                 ``<volume_id>,<file_name_hash>`` format.
 
         """
-        url = self.get_file_url(fid)
+        url = self.get_file_url(fid, public=False, collection=collection)
         if url is None:
             return None
         base_url = url.rsplit("/", 1)[0]
@@ -528,4 +568,5 @@ class SeaweedFS:
             response_data = {}
         if not isinstance(response_data, dict):
             return None
-        return response_data.get("Version")
+        version = response_data.get("Version")
+        return version if isinstance(version, str) else None

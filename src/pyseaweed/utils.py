@@ -12,12 +12,15 @@ from pyseaweed.version import __version__
 class Connection:
     """Handle http communication with SeaweedFS."""
 
-    def __init__(self, use_session: bool = False) -> None:
+    def __init__(self, use_session: bool = False, timeout: float | None = None) -> None:
         """Create a Connection instance.
 
         Args:
             use_session: Use ``requests.Session()`` for connections instead of
                 plain ``requests`` calls (default: False).
+            timeout: Default request timeout in seconds. Applied to every
+                request unless overridden per call (default: None, i.e. no
+                timeout).
 
         """
         self._conn: requests.Session | ModuleType
@@ -25,6 +28,7 @@ class Connection:
             self._conn = requests.Session()
         else:
             self._conn = requests
+        self.timeout = timeout
 
     def close(self) -> None:
         """Close the underlying session, if any."""
@@ -72,7 +76,7 @@ class Connection:
 
         """
         try:
-            res = self._conn.head(url, headers=self._prepare_headers(additional_headers), timeout=timeout)
+            res = self._conn.head(url, headers=self._prepare_headers(additional_headers), timeout=self.timeout if timeout is None else timeout)
         except requests.RequestException:
             return None
         if 200 <= res.status_code < 300:
@@ -95,7 +99,7 @@ class Connection:
 
         """
         try:
-            res = self._conn.get(url, headers=self._prepare_headers(additional_headers), timeout=timeout)
+            res = self._conn.get(url, headers=self._prepare_headers(additional_headers), timeout=self.timeout if timeout is None else timeout)
         except requests.RequestException:
             return None
         if 200 <= res.status_code < 300:
@@ -120,7 +124,7 @@ class Connection:
 
         """
         try:
-            res = self._conn.get(url, headers=self._prepare_headers(additional_headers), timeout=timeout)
+            res = self._conn.get(url, headers=self._prepare_headers(additional_headers), timeout=self.timeout if timeout is None else timeout)
         except requests.RequestException:
             return None
         if 200 <= res.status_code < 300:
@@ -152,7 +156,7 @@ class Connection:
 
         """
         try:
-            res = self._conn.get(url, headers=self._prepare_headers(additional_headers), timeout=timeout, stream=True)
+            res = self._conn.get(url, headers=self._prepare_headers(additional_headers), timeout=self.timeout if timeout is None else timeout, stream=True)
         except requests.RequestException:
             return None
         if 200 <= res.status_code < 300:
@@ -189,7 +193,7 @@ class Connection:
                 url,
                 files={"file": (filename, file_stream) if content_type is None else (filename, file_stream, content_type)},
                 headers=self._prepare_headers(additional_headers),
-                timeout=timeout,
+                timeout=self.timeout if timeout is None else timeout,
             )
         except requests.RequestException:
             return None
@@ -212,7 +216,7 @@ class Connection:
 
         """
         try:
-            res = self._conn.delete(url, headers=self._prepare_headers(additional_headers), timeout=timeout)
+            res = self._conn.delete(url, headers=self._prepare_headers(additional_headers), timeout=self.timeout if timeout is None else timeout)
         except requests.RequestException:
             return False
         if 200 <= res.status_code < 300:

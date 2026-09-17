@@ -209,6 +209,16 @@ class TestConnection:
         with mock.patch.object(requests, "delete", side_effect=requests.ConnectionError):
             assert not self.conn.delete_data("http://utek.pl")
 
+    def test_default_timeout(self) -> None:
+        conn = Connection(timeout=7.5)
+        with mock.patch.object(requests, "get", return_value=mock.Mock(status_code=200, text="OK")) as get_mock:
+            conn.get_data("http://utek.pl")
+            assert get_mock.call_args.kwargs["timeout"] == 7.5
+        with mock.patch.object(requests, "get", return_value=mock.Mock(status_code=200, text="OK")) as get_mock:
+            conn.get_data("http://utek.pl", timeout=1.0)
+            assert get_mock.call_args.kwargs["timeout"] == 1.0
+        assert self.conn.timeout is None
+
 
 class TestSeaweedFS:
     seaweed: SeaweedFS
@@ -219,6 +229,18 @@ class TestSeaweedFS:
 
     def test_repr(self) -> None:
         assert str(self.seaweed) == "<SeaweedFS localhost:9333>"
+
+    def test_timeout_forwarded(self) -> None:
+        w = SeaweedFS(timeout=3.0)
+        assert w.conn.timeout == 3.0
+
+    def test_close_and_context_manager(self) -> None:
+        with mock.patch.object(self.seaweed.conn, "close") as close_mock:
+            self.seaweed.close()
+            close_mock.assert_called_once_with()
+        with SeaweedFS(use_session=True) as w:
+            assert isinstance(w, SeaweedFS)
+            assert isinstance(w.conn._conn, requests.Session)
 
     def test_exception(self) -> None:
         with HTTMock(assign_response):
@@ -313,6 +335,8 @@ class TestSeaweedFS:
             assert captured["range"] == "bytes=-100"
             self.seaweed.get_file(FID, byte_range=(100, None))
             assert captured["range"] == "bytes=100-"
+            self.seaweed.get_file(FID, byte_range=(None, None))
+            assert captured["range"] is None
 
     def test_get_file_params(self) -> None:
         with HTTMock(FULL):
@@ -346,6 +370,18 @@ class TestSeaweedFS:
             assert loc is not None
         assert "collection=pytest" in captured["query"]
         assert "volumeId=3" in captured["query"]
+
+    def test_get_file_url_collection(self) -> None:
+        captured: dict[str, Any] = {}
+
+        def lookup(url: Any, request: Any) -> dict[str, Any]:
+            captured["query"] = url.query
+            return json_resp({"locations": [VOLUME_RESP]})
+
+        with HTTMock(dispatch([("/dir/lookup", lookup)])):
+            url = self.seaweed.get_file_url(FID, collection="pytest")
+            assert url == f"http://pub.local:8080/{FID}"
+        assert "collection=pytest" in captured["query"]
 
     def test_get_file_size(self) -> None:
         with HTTMock(FULL):
@@ -544,6 +580,42 @@ class TestSeaweedFS:
         mock = dispatch([("/dir/status", json_resp([1, 2, 3]))])
         with HTTMock(mock):
             assert self.seaweed.version is None
+
+    def test_version_non_str_value(self) -> None:
+        mock = dispatch([("/dir/status", json_resp({"Version": 5}))])
+        with HTTMock(mock):
+            assert self.seaweed.version is None
+
+    def test_upload_file_post_url_has_no_assign_query(self) -> None:
+        captured: dict[str, Any] = {}
+
+        def volume_post(url: Any, request: Any) -> dict[str, Any]:
+            captured["post_path"] = url.path
+            captured["post_query"] = url.query
+            return json_resp({"size": 1}, status=201)
+
+        mock = dispatch([
+            ("/dir/assign", json_resp(ASSIGN_RESP)),
+            ("/" + FID.split(",")[0] + ",", volume_post),
+        ])
+        with HTTMock(mock):
+            assert self.seaweed.upload_file(__file__, collection="x") == FID
+        assert captured["post_query"] == ""
+
+    def test_volume_server_status_uses_internal_url(self) -> None:
+        captured: dict[str, Any] = {}
+
+        def status(url: Any, request: Any) -> dict[str, Any]:
+            captured["netloc"] = url.netloc
+            return json_resp({"Version": "4.47"})
+
+        mock = dispatch([
+            ("/dir/lookup", json_resp({"locations": [VOLUME_RESP]})),
+            ("/status", status),
+        ])
+        with HTTMock(mock):
+            assert self.seaweed.volume_server_status(FID) == {"Version": "4.47"}
+        assert captured["netloc"] == "vol.local:8080"
 
 
 class TestExceptions:
