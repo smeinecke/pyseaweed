@@ -4,7 +4,7 @@
 
 import json
 import unittest
-from typing import Any, Dict, List, Tuple
+from typing import Any, Dict, List, Tuple, cast
 from unittest import mock
 
 import requests
@@ -66,7 +66,8 @@ def dispatch(routes: List[Tuple[str, Any]]) -> Any:
     def handler(url: Any, request: Any) -> Dict[str, Any]:
         for prefix, resp in routes:
             if url.path.startswith(prefix):
-                return resp(url, request) if callable(resp) else resp
+                resp = resp(url, request) if callable(resp) else resp
+                return cast(Dict[str, Any], resp)
         return {"status_code": 404, "content": b"NOK"}
 
     return handler
@@ -124,7 +125,7 @@ class ReqTests(unittest.TestCase):
     def test_head(self) -> None:
         with HTTMock(response_content):
             r = self.conn.head("http://utek.pl")
-            self.assertIsNotNone(r)
+            assert r is not None
             self.assertEqual(r.status_code, 200)
         with HTTMock(response_content_404):
             r = self.conn.head("http://utek.pl")
@@ -220,7 +221,7 @@ class SeaweedFSTests(unittest.TestCase):
     def test_get_file_location(self) -> None:
         with HTTMock(FULL):
             loc = self.seaweed.get_file_location("3")
-            self.assertIsNotNone(loc)
+            assert loc is not None
             self.assertEqual(loc.public_url, "pub.local:8080")
             self.assertEqual(loc.url, "vol.local:8080")
 
@@ -233,7 +234,7 @@ class SeaweedFSTests(unittest.TestCase):
         mock = dispatch([("/dir/lookup", json_resp({"locations": [{"url": "vol.local:8080"}]}))])
         with HTTMock(mock):
             loc = self.seaweed.get_file_location("3")
-            self.assertIsNotNone(loc)
+            assert loc is not None
             self.assertEqual(loc.public_url, "vol.local:8080")
 
     def test_get_file(self) -> None:

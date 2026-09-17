@@ -66,8 +66,8 @@ class FunctionalTests(unittest.TestCase):
         assert fid is not None
         url_public = self.seaweed.get_file_url(fid)
         url_internal = self.seaweed.get_file_url(fid, public=False)
-        self.assertIsNotNone(url_public)
-        self.assertIsNotNone(url_internal)
+        assert url_public is not None
+        assert url_internal is not None
         self.assertTrue(url_public.endswith(fid))
         self.assertTrue(url_internal.endswith(fid))
         res = self.seaweed.delete_file(fid)
@@ -77,7 +77,7 @@ class FunctionalTests(unittest.TestCase):
         fid = self.seaweed.upload_file(__file__)
         assert fid is not None
         loc = self.seaweed.get_file_location(fid.split(",")[0])
-        self.assertIsNotNone(loc)
+        assert loc is not None
         self.assertTrue(loc.url)
         self.assertTrue(loc.public_url)
         res = self.seaweed.delete_file(fid)
@@ -173,8 +173,8 @@ class FunctionalTestsSession(unittest.TestCase):
         assert fid is not None
         url_public = self.seaweed.get_file_url(fid)
         url_internal = self.seaweed.get_file_url(fid, public=False)
-        self.assertIsNotNone(url_public)
-        self.assertIsNotNone(url_internal)
+        assert url_public is not None
+        assert url_internal is not None
         self.assertTrue(url_public.endswith(fid))
         self.assertTrue(url_internal.endswith(fid))
         res = self.seaweed.delete_file(fid)
@@ -184,7 +184,7 @@ class FunctionalTestsSession(unittest.TestCase):
         fid = self.seaweed.upload_file(__file__)
         assert fid is not None
         loc = self.seaweed.get_file_location(fid.split(",")[0])
-        self.assertIsNotNone(loc)
+        assert loc is not None
         self.assertTrue(loc.url)
         self.assertTrue(loc.public_url)
         res = self.seaweed.delete_file(fid)

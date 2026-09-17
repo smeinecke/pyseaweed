@@ -837,16 +837,16 @@ requires-dist = [{ name = "requests", specifier = ">=2.20" }]
 
 [package.metadata.requires-dev]
 dev = [
-    { name = "bandit", specifier = ">=1.8.0" },
+    { name = "bandit", specifier = ">=1.8.6" },
     { name = "httmock", specifier = ">=1.4.0" },
-    { name = "pre-commit", specifier = ">=4.0.0" },
-    { name = "pyright", specifier = ">=1.1.350" },
-    { name = "pytest", specifier = ">=8.0.0" },
-    { name = "pytest-cov", specifier = ">=5.0.0" },
-    { name = "pytest-timeout", specifier = ">=2.3.0" },
+    { name = "pre-commit", specifier = ">=4.3.0" },
+    { name = "pyright", specifier = ">=1.1.414" },
+    { name = "pytest", specifier = ">=8.4.0" },
+    { name = "pytest-cov", specifier = ">=7.1.0" },
+    { name = "pytest-timeout", specifier = ">=2.4.0" },
     { name = "radon", specifier = ">=6.0.1" },
-    { name = "ruff", specifier = ">=0.15.10" },
-    { name = "vulture", specifier = ">=2.10" },
+    { name = "ruff", specifier = ">=0.16.8" },
+    { name = "vulture", specifier = ">=2.16" },
     { name = "xenon", specifier = ">=0.9.3" },
 ]
 
