@@ -23,27 +23,30 @@ From source::
 
     git clone git@github.com:utek/pyseaweed.git
     cd pyseaweed
-    python setup.py install
+    pip install .
 
 ============
 Tests
 ============
 
-Install dependencies::
+Install dependencies (requires uv_)::
 
-    pip install -r test_requirements.txt
+    uv sync
 
-Run tests::
+Run unit tests::
 
-    python setup.py tests
+    uv run pytest tests/unit
 
-Or using nose::
+Or using make::
 
-    nosetests
+    make test
 
 .. note::
-    Functional tests assumes that there is WeedFS master running on localhost:9333 (defaults).
-    If it's not then there will be errors in tests.
+    Integration tests assume that there is a SeaweedFS master running on
+    localhost:9333 (defaults). Start one with ``make weed-up`` and run
+    ``make test-integration`` (``make test-integration-local`` does both).
+
+.. _uv: https://docs.astral.sh/uv/
 
 ============
 Usage

@@ -26,7 +26,7 @@ jobs:
           path: |
             ~/.cache/uv
             ~/.cache/pip
-          key: uv-cache-${{ hashFiles('**/pyproject.toml') }}
+          key: uv-cache-${{ hashFiles('**/pyproject.toml', '**/uv.lock') }}
           restore-keys: |
             uv-cache-
 
@@ -95,7 +95,7 @@ jobs:
           path: |
             ~/.cache/uv
             ~/.cache/pip
-          key: uv-cache-${{ hashFiles('**/pyproject.toml') }}
+          key: uv-cache-${{ hashFiles('**/pyproject.toml', '**/uv.lock') }}
           restore-keys: |
             uv-cache-
 
