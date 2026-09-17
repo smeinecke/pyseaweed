@@ -1,2 +1,100 @@
-[tool.black]
-line-length = 79
+[build-system]
+requires = ["setuptools>=61"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "pyseaweed"
+dynamic = ["version"]
+description = "Module to simplify usage of SeaweedFS in python."
+readme = "README.rst"
+license = {text = "MIT"}
+authors = [
+    {name = "Łukasz Bołdys", email = "mail@utek.pl"},
+]
+requires-python = ">=3.9"
+dependencies = [
+    "requests>=2.20",
+]
+classifiers = [
+    "Intended Audience :: Developers",
+    "Programming Language :: Python",
+    "Programming Language :: Python :: 3.9",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "License :: OSI Approved :: MIT License",
+    "Operating System :: OS Independent",
+]
+
+[project.urls]
+Homepage = "https://github.com/utek/pyseaweed"
+
+[dependency-groups]
+dev = [
+    "pytest>=8.0.0",
+    "pytest-cov>=5.0.0",
+    "pytest-timeout>=2.3.0",
+    "httmock>=1.4.0",
+    "ruff>=0.15.10",
+    "radon>=6.0.1",
+    "xenon>=0.9.3",
+    "vulture>=2.10",
+    "pyright>=1.1.350",
+    "bandit>=1.8.0",
+    "pre-commit>=4.0.0",
+]
+
+[tool.setuptools.dynamic]
+version = {attr = "pyseaweed.version.__version__"}
+
+[tool.setuptools.packages.find]
+include = ["pyseaweed*"]
+
+[tool.ruff]
+exclude = ["docs", "tests"]
+line-length = 160
+indent-width = 4
+
+[tool.ruff.format]
+quote-style = "double"
+indent-style = "space"
+line-ending = "lf"
+preview = true
+
+[tool.ruff.lint]
+preview = true
+explicit-preview-rules = true
+extend-select = [
+    "ANN",
+    "UP",
+    "I",
+]
+select = ["E9", "F82", "D"]
+ignore = ["D203", "D213", "D100", "F821"]
+
+[tool.pytest.ini_options]
+addopts = [
+    "--import-mode=importlib",
+]
+pythonpath = ["."]
+testpaths = [
+    "tests/unit",
+    "tests/integration",
+]
+markers = [
+    "integration: marks tests as integration tests that connect to a live SeaweedFS server",
+]
+
+[tool.pyright]
+exclude = ["**/__pycache__", "**/node_modules", "**/dist", "**/build", "**/venv", "**/.venv", "docs"]
+
+[tool.bandit]
+exclude_dirs = [".venv", "tests", "docs"]
+skips = ["B311"]
+
+[tool.vulture]
+exclude = ["dist", "build", "venv", ".venv", "tests", "docs"]
+ignore_names = ["WeedFS", "VERSION"]
+min_confidence = 80
+paths = ["."]
+sort_by_size = true

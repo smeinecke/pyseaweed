@@ -24,8 +24,20 @@ pip-log.txt
 
 # Unit test / coverage reports
 .coverage
+coverage.xml
+htmlcov
 .tox
 nosetests.xml
+.pytest_cache
+.ruff_cache
+
+# Virtual environments
+.venv
+venv
+
+# Tool caches
+.pyright
+__pycache__
 
 # Translations
 *.mo
