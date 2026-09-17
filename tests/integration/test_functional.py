@@ -147,6 +147,25 @@ class FunctionalTests(unittest.TestCase):
         self.assertEqual(self.seaweed.get_file(fid), b"submit-data")
         self.assertTrue(self.seaweed.delete_file(fid))
 
+    def test_admin_endpoints(self) -> None:
+        self.assertTrue(self.seaweed.is_healthy())
+        cluster = self.seaweed.cluster_status()
+        assert cluster is not None
+        self.assertIn("IsLeader", cluster)
+        vol_status = self.seaweed.volume_status()
+        assert vol_status is not None
+        self.assertIn("Volumes", vol_status)
+        self.assertFalse(self.seaweed.delete_collection("no-such-collection"))
+        self.assertFalse(self.seaweed.grow_volumes(1))
+
+    def test_volume_server_status(self) -> None:
+        fid = self.seaweed.upload_file(__file__)
+        assert fid is not None
+        status = self.seaweed.volume_server_status(fid)
+        assert status is not None
+        self.assertIn("Version", status)
+        self.assertTrue(self.seaweed.delete_file(fid))
+
     def test_get_wrong_file(self) -> None:
         file_content = self.seaweed.get_file("3,123456790")
         self.assertIsNone(file_content)
@@ -281,6 +300,25 @@ class FunctionalTestsSession(unittest.TestCase):
         fid = self.seaweed.submit_file(stream=io.BytesIO(b"submit-data"), name="submit.bin")
         assert fid is not None
         self.assertEqual(self.seaweed.get_file(fid), b"submit-data")
+        self.assertTrue(self.seaweed.delete_file(fid))
+
+    def test_admin_endpoints(self) -> None:
+        self.assertTrue(self.seaweed.is_healthy())
+        cluster = self.seaweed.cluster_status()
+        assert cluster is not None
+        self.assertIn("IsLeader", cluster)
+        vol_status = self.seaweed.volume_status()
+        assert vol_status is not None
+        self.assertIn("Volumes", vol_status)
+        self.assertFalse(self.seaweed.delete_collection("no-such-collection"))
+        self.assertFalse(self.seaweed.grow_volumes(1))
+
+    def test_volume_server_status(self) -> None:
+        fid = self.seaweed.upload_file(__file__)
+        assert fid is not None
+        status = self.seaweed.volume_server_status(fid)
+        assert status is not None
+        self.assertIn("Version", status)
         self.assertTrue(self.seaweed.delete_file(fid))
 
     def test_get_wrong_file(self) -> None:

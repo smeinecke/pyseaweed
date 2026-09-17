@@ -9,7 +9,7 @@ import json
 import os
 import random
 from collections.abc import Iterator
-from typing import BinaryIO, NamedTuple
+from typing import Any, BinaryIO, NamedTuple
 from urllib.parse import urlencode
 
 from pyseaweed.exceptions import BadFidFormat
@@ -416,6 +416,105 @@ class SeaweedFS:
 
         """
         url = f"http://{self.master_addr}:{self.master_port}/vol/vacuum?garbageThreshold={threshold}"
+        return self.conn.get_data(url) is not None
+
+    def _get_json(self, url: str) -> dict[str, Any] | None:
+        """Get and decode a JSON object response from the given url."""
+        res = self.conn.get_data(url)
+        try:
+            data = json.loads(res) if res else None
+        except ValueError:
+            return None
+        return data if isinstance(data, dict) else None
+
+    def grow_volumes(self, count: int, **kwargs: str) -> bool:
+        """Pre-allocate new volumes on the volume servers.
+
+        Requires free volume slots, i.e. the volume servers must be
+        started with a ``-max`` value higher than the number of
+        existing volumes.
+
+        Args:
+            count: Number of volumes to create.
+            **kwargs: Extra parameters forwarded to the ``/vol/grow``
+                request (e.g. ``collection``, ``replication``, ``ttl``,
+                ``dataCenter``, ``dataNode``, ``rack``, ``disk``).
+
+        Returns:
+            True if the volumes were created. False otherwise.
+
+        """
+        params = urlencode({"count": str(count), **kwargs})
+        url = f"http://{self.master_addr}:{self.master_port}/vol/grow?{params}"
+        data = self._get_json(url)
+        return data is not None and "error" not in data
+
+    def delete_collection(self, collection: str) -> bool:
+        """Delete a collection and all its volumes.
+
+        Args:
+            collection: Name of the collection to delete.
+
+        Returns:
+            True if the collection was deleted. False otherwise.
+
+        """
+        params = urlencode({"collection": collection})
+        url = f"http://{self.master_addr}:{self.master_port}/col/delete?{params}"
+        data = self._get_json(url)
+        return data is not None and "error" not in data
+
+    def cluster_status(self) -> dict[str, Any] | None:
+        """Get the cluster status from the master.
+
+        Returns:
+            Cluster status dict (leader, topology) or None if the
+            master can't be reached or returns malformed JSON.
+
+        """
+        url = f"http://{self.master_addr}:{self.master_port}/cluster/status"
+        return self._get_json(url)
+
+    def volume_status(self) -> dict[str, Any] | None:
+        """Get the status of all volumes from the master.
+
+        Returns:
+            Volume status dict or None if the master can't be reached
+            or returns malformed JSON.
+
+        """
+        url = f"http://{self.master_addr}:{self.master_port}/vol/status"
+        return self._get_json(url)
+
+    def volume_server_status(self, fid: str) -> dict[str, Any] | None:
+        """Get the status of the volume server holding the given fid.
+
+        Args:
+            fid: File identifier ``<volume_id>,<file_name_hash>``.
+
+        Returns:
+            Volume server status dict (version, volumes, disk stats) or
+            None if the volume can't be located or reached.
+
+        Raises:
+            BadFidFormat: If fid is not in the
+                ``<volume_id>,<file_name_hash>`` format.
+
+        """
+        url = self.get_file_url(fid)
+        if url is None:
+            return None
+        base_url = url.rsplit("/", 1)[0]
+        return self._get_json(f"{base_url}/status")
+
+    def is_healthy(self) -> bool:
+        """Check the master cluster health endpoint.
+
+        Returns:
+            True if the master reports healthy. False otherwise.
+
+        """
+        url = f"http://{self.master_addr}:{self.master_port}/cluster/healthz"
         return self.conn.get_data(url) is not None
 
     @property
