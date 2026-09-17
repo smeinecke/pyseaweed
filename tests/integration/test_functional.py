@@ -63,7 +63,7 @@ class FunctionalTests(unittest.TestCase):
     #     res = self.seaweed.vacuum()
     #     self.assertTrue(res)
     def test_bad_fid(self) -> None:
-        self.assertRaises(BadFidFormat, self.seaweed.get_file_url, ("a"))
+        self.assertRaises(BadFidFormat, self.seaweed.get_file_url, "a")
 
     def test_get_file(self) -> None:
         fid = self.seaweed.upload_file(__file__)
@@ -129,7 +129,7 @@ class FunctionalTestsSession(unittest.TestCase):
     #     res = self.seaweed.vacuum()
     #     self.assertTrue(res)
     def test_bad_fid(self) -> None:
-        self.assertRaises(BadFidFormat, self.seaweed.get_file_url, ("a"))
+        self.assertRaises(BadFidFormat, self.seaweed.get_file_url, "a")
 
     def test_get_file(self) -> None:
         fid = self.seaweed.upload_file(__file__)
