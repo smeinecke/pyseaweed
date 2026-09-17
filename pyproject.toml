@@ -22,12 +22,19 @@ classifiers = [
     "Operating System :: OS Independent",
 ]
 
+[project.optional-dependencies]
+async = [
+    "httpx>=0.28",
+]
+
 [project.urls]
 Homepage = "https://github.com/utek/pyseaweed"
 
 [dependency-groups]
 dev = [
+    "httpx>=0.28",
     "pytest>=9.1.1",
+    "pytest-asyncio>=1.0",
     "pytest-cov>=7.1.0",
     "pytest-timeout>=2.4.0",
     "httmock>=1.4.0",
@@ -74,6 +81,7 @@ select = ["E9", "F82", "D"]
 ignore = ["D203", "D213", "D100", "F821"]
 
 [tool.pytest.ini_options]
+asyncio_mode = "auto"
 addopts = [
     "--import-mode=importlib",
 ]
