@@ -17,6 +17,21 @@ SeaweedFS
 
 
 ===============
+Async client
+===============
+
+Requires the ``async`` extra (``pip install "pyseaweed[async]"``).
+
+.. autoclass:: pyseaweed.async_client.AsyncSeaweedFS
+    :members:
+
+    .. automethod:: __init__
+
+.. autoclass:: pyseaweed.async_client.AsyncConnection
+    :members:
+
+
+===============
 Utils
 ===============
 

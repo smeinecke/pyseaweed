@@ -3,6 +3,22 @@ Changelog
 ===========
 
 -------
+3.1.0
+-------
+
+    - Add ``AsyncSeaweedFS``, an async client mirroring the full
+      ``SeaweedFS`` API on top of httpx. Install with
+      ``pip install "pyseaweed[async]"``. Available as
+      ``from pyseaweed import AsyncSeaweedFS`` or
+      ``from pyseaweed.async_client import AsyncSeaweedFS``
+    - Add ``retries`` parameter to ``Connection`` and ``SeaweedFS``
+      (and the async equivalents) to retry transient server errors
+    - Validate fid format strictly (numeric volume id, hex file key,
+      optional extension)
+    - CI: unit tests now run on Python 3.13 and 3.14; release builds
+      are attested with build provenance
+
+-------
 3.0.0
 -------
 

@@ -25,6 +25,9 @@ From PyPI::
 
     pip install pyseaweed
 
+    # for the async client (httpx)
+    pip install "pyseaweed[async]"
+
 ============
 Tests
 ============
@@ -101,6 +104,22 @@ Cluster administration and status
     w.delete_collection("old-collection")
     w.vacuum(0.4)                 # force garbage collection
     w.version                     # master version string
+
+Async client (requires ``pip install "pyseaweed[async]"``, mirrors the
+full ``SeaweedFS`` API on top of httpx)
+
+.. code-block:: python
+
+    from pyseaweed import AsyncSeaweedFS
+
+    async with AsyncSeaweedFS("localhost", 9333, timeout=30, retries=3) as w:
+        fid = await w.upload_file("n.txt")
+        content = await w.get_file(fid)
+        stream = await w.get_file_stream(fid, chunk_size=65536)
+        async for chunk in stream:
+            ...
+        await w.delete_file(fid)
+        await w.version()           # method, not a property
 
 
 .. _Seaweed-FS: https://github.com/chrislusf/seaweedfs
