@@ -117,6 +117,10 @@ jobs:
           echo "Waiting for SeaweedFS filer to be ready..."
           timeout 60 bash -c 'until nc -z localhost 8888; do sleep 1; done'
           echo "SeaweedFS filer is ready!"
+          docker run -d --name pyseaweed-toxiproxy --network host ghcr.io/shopify/toxiproxy:2.12.0
+          echo "Waiting for toxiproxy to be ready..."
+          timeout 60 bash -c 'until nc -z localhost 8474; do sleep 1; done'
+          echo "toxiproxy is ready!"
 
       - name: Cache dependencies
         uses: actions/cache@v6
@@ -139,4 +143,4 @@ jobs:
 
       - name: Stop services
         if: always()
-        run: docker rm -f pyseaweed-test-fs
+        run: docker rm -f pyseaweed-test-fs pyseaweed-toxiproxy
