@@ -17,6 +17,18 @@ SeaweedFS
 
 
 ===============
+Filer
+===============
+
+Path-based file access via the SeaweedFS filer (port 8888).
+
+.. autoclass:: pyseaweed.filer.Filer
+    :members:
+
+    .. automethod:: __init__
+
+
+===============
 Async client
 ===============
 

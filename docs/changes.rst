@@ -6,6 +6,13 @@ Changelog
 3.1.0
 -------
 
+    - Add ``Filer``, a path-based client for the SeaweedFS filer
+      (port 8888): ``upload_file``, ``download_file``,
+      ``get_file_stream``, ``exists``, ``stat``, ``list_dir`` with
+      pagination, ``mkdir``, ``move``, ``delete`` (``recursive``),
+      and extended-attribute tagging via ``set_tags``, ``get_tags``
+      and ``delete_tags``
+    - Add ``Connection.post`` and ``Connection.put`` helpers
     - Add ``AsyncSeaweedFS``, an async client mirroring the full
       ``SeaweedFS`` API on top of httpx. Install with
       ``pip install "pyseaweed[async]"``. Available as

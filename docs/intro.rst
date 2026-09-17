@@ -117,5 +117,24 @@ Async client (requires the ``async`` extra, mirrors the full
         await w.delete_file(fid)
         await w.version()           # method, not a property
 
+Filer (path-based file access on the SeaweedFS filer, port 8888)
+
+.. code-block:: python
+
+    from pyseaweed import Filer
+
+    with Filer("localhost", 8888) as f:
+        f.upload_file("/docs/report.pdf", "report.pdf")
+        f.mkdir("/docs/archive")
+
+        for entry in f.list_dir("/docs")["Entries"]:
+            print(entry["FullPath"], entry["FileSize"])
+
+        content = f.download_file("/docs/report.pdf")
+        f.move("/docs/report.pdf", "/docs/archive/report.pdf")
+        f.set_tags("/docs/archive/report.pdf", {"kind": "report"})
+        f.get_tags("/docs/archive/report.pdf")   # {"Kind": "report"}
+        f.delete("/docs/archive", recursive=True)
+
 
 .. _Seaweed-FS: https://github.com/chrislusf/seaweedfs
