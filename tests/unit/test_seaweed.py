@@ -450,6 +450,48 @@ class SeaweedFSTests(unittest.TestCase):
         with HTTMock(FULL):
             self.assertTrue(self.seaweed.vacuum())
 
+    def test_grow_volumes(self) -> None:
+        with HTTMock(dispatch([("/vol/grow", json_resp({"count": 1}))])):
+            self.assertTrue(self.seaweed.grow_volumes(1, collection="x"))
+        with HTTMock(dispatch([("/vol/grow", json_resp({"error": "only 0 volumes left"}))])):
+            self.assertFalse(self.seaweed.grow_volumes(1))
+        with HTTMock(dispatch([("/vol/grow", {"status_code": 500, "content": b"err"})])):
+            self.assertFalse(self.seaweed.grow_volumes(1))
+
+    def test_delete_collection(self) -> None:
+        with HTTMock(dispatch([("/col/delete", json_resp({}))])):
+            self.assertTrue(self.seaweed.delete_collection("c"))
+        with HTTMock(dispatch([("/col/delete", json_resp({"error": "collection c does not exist"}))])):
+            self.assertFalse(self.seaweed.delete_collection("c"))
+
+    def test_cluster_status(self) -> None:
+        with HTTMock(dispatch([("/cluster/status", json_resp({"IsLeader": True}))])):
+            self.assertEqual(self.seaweed.cluster_status(), {"IsLeader": True})
+        with HTTMock(dispatch([("/cluster/status", {"status_code": 200, "content": b"bad"})])):
+            self.assertIsNone(self.seaweed.cluster_status())
+        with HTTMock(dispatch([("/cluster/status", json_resp([1, 2]))])):
+            self.assertIsNone(self.seaweed.cluster_status())
+
+    def test_volume_status(self) -> None:
+        with HTTMock(dispatch([("/vol/status", json_resp({"Volumes": {}}))])):
+            self.assertEqual(self.seaweed.volume_status(), {"Volumes": {}})
+
+    def test_volume_server_status(self) -> None:
+        mock = dispatch([
+            ("/dir/lookup", json_resp({"locations": [VOLUME_RESP]})),
+            ("/status", json_resp({"Version": "4.47"})),
+        ])
+        with HTTMock(mock):
+            self.assertEqual(self.seaweed.volume_server_status(FID), {"Version": "4.47"})
+        with HTTMock(dispatch([("/dir/lookup", json_resp({"locations": []}))])):
+            self.assertIsNone(self.seaweed.volume_server_status(FID))
+
+    def test_is_healthy(self) -> None:
+        with HTTMock(dispatch([("/cluster/healthz", {"status_code": 200, "content": b""})])):
+            self.assertTrue(self.seaweed.is_healthy())
+        with HTTMock(dispatch([("/cluster/healthz", {"status_code": 503, "content": b""})])):
+            self.assertFalse(self.seaweed.is_healthy())
+
     def test_version(self) -> None:
         with HTTMock(FULL):
             self.assertEqual(self.seaweed.version, "30GB 4.00")
