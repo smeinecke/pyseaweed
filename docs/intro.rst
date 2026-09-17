@@ -52,23 +52,51 @@ Or using make::
 Usage
 ============
 
-Upload file to weedFS
+Upload file to SeaweedFS
 
 .. code-block:: python
 
-    from pyseaweed import WeedFS
+    from pyseaweed import SeaweedFS
 
-    # File upload
-    w = WeedFS("localhost", 9333) # weed-fs master address and port
-    fid = w.upload_file("n.txt") # path to file
+    # WeedFS is kept as a backward-compatible alias
+    w = SeaweedFS("localhost", 9333)  # master address and port
+
+    # File upload (assigns a file id, then stores on a volume server)
+    fid = w.upload_file("n.txt")  # path to file
+
+    # One-call upload via the master /submit endpoint
+    fid = w.submit_file("n.txt")
 
     # Get file url
     file_url = w.get_file_url(fid)
+
+    # Read whole file, or a byte range
+    content = w.get_file(fid)
+    first_kib = w.get_file(fid, byte_range=(0, 1023))
+
+    # Stream large files without buffering them in memory
+    for chunk in w.get_file_stream(fid, chunk_size=65536):
+        ...
+
+    # Server-side image resizing / other volume read parameters
+    thumb_url = w.get_file_url(fid, params={"width": "100", "height": "100"})
 
     # Delete file
     res = w.delete_file(fid)
     # res is boolean (True if file was deleted)
 
+Cluster administration and status
+
+.. code-block:: python
+
+    w.is_healthy()                # /cluster/healthz
+    w.cluster_status()            # leader and topology
+    w.volume_status()             # all volumes on the master
+    w.volume_server_status(fid)   # volume server holding the fid
+    w.grow_volumes(4, collection="images")
+    w.delete_collection("old-collection")
+    w.vacuum(0.4)                 # force garbage collection
+    w.version                     # master version string
 
 
 .. _Weed-FS: https://github.com/chrislusf/seaweedfs

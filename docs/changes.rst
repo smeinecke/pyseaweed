@@ -3,6 +3,25 @@ Changelog
 ===========
 
 -------
+2.1.0
+-------
+
+    - Add ``get_file_stream`` for chunked downloads without buffering
+      the whole file in memory
+    - Add ``byte_range`` support (HTTP Range requests) and read query
+      parameters (image resizing, ``readDeleted``) to ``get_file`` and
+      ``get_file_url``
+    - Add ``collection`` parameter to ``get_file_location``
+    - Add ``submit_file`` for one-call uploads via the master
+      ``/submit`` endpoint
+    - Add admin/status endpoints: ``grow_volumes``,
+      ``delete_collection``, ``cluster_status``, ``volume_status``,
+      ``volume_server_status`` and ``is_healthy``
+    - Add ``Connection.close`` and context-manager support
+    - Accept any 2xx status code for volume operations
+    - Harden error handling for malformed server responses
+
+-------
 2.0.0
 -------
 

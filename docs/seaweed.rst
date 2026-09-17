@@ -5,7 +5,7 @@ WeedFS
 .. automodule:: pyseaweed.seaweed
     :members:
 
-    .. autoclass:: WeedFS
+    .. autoclass:: SeaweedFS
         :members:
 
         .. automethod:: __init__
