@@ -1,5 +1,3 @@
-# -*- coding: utf-8 -*-
-#
 # PySeaweed documentation build configuration file, created by
 # sphinx-quickstart on Sun Apr 27 13:17:51 2014.
 #
@@ -11,8 +9,6 @@
 #
 # All configuration values have a default; values that are commented out
 # serve to show the default.
-
-import sphinx_rtd_theme
 
 from pyseaweed.version import __version__
 
@@ -31,6 +27,7 @@ from pyseaweed.version import __version__
 # ones.
 extensions = [
     "sphinx.ext.autodoc",
+    "sphinx.ext.napoleon",
     "sphinx.ext.todo",
     "sphinx.ext.viewcode",
 ]
@@ -48,8 +45,8 @@ source_suffix = ".rst"
 master_doc = "index"
 
 # General information about the project.
-project = u"PySeaweed"
-copyright = u"2014, Łukasz Bołdys"
+project = "PySeaweed"
+copyright = "2014-2026, Łukasz Bołdys, Stefan Meinecke"
 
 # The version info for the project you're documenting, acts as replacement for
 # |version| and |release|, also used in various other places throughout the
@@ -101,16 +98,11 @@ pygments_style = "sphinx"
 
 # -- Options for HTML output ----------------------------------------------
 html_theme = "sphinx_rtd_theme"
-# html_theme = 'default'
 
 # Theme options are theme-specific and customize the look and feel of a theme
 # further.  For a list of options available for each theme, see the
 # documentation.
 # html_theme_options = {}
-
-# Add any paths that contain custom themes here, relative to this directory.
-# html_theme_path = []
-html_theme_path = [sphinx_rtd_theme.get_html_theme_path()]
 
 # The name for this set of Sphinx documents.  If None, it defaults to
 # "<project> v<release> documentation".
@@ -131,7 +123,7 @@ html_theme_path = [sphinx_rtd_theme.get_html_theme_path()]
 # Add any paths that contain custom static files (such as style sheets) here,
 # relative to this directory. They are copied after the builtin static files,
 # so a file named "default.css" will overwrite the builtin "default.css".
-html_static_path = ["_static"]
+html_static_path = []
 
 # Add any extra paths that contain custom files (such as robots.txt or
 # .htaccess) here, relative to this directory. These files are copied
@@ -201,8 +193,8 @@ latex_documents = [
     (
         "index",
         "PySeaweed.tex",
-        u"PySeaweed Documentation",
-        u"Łukasz Bołdys",
+        "PySeaweed Documentation",
+        "Łukasz Bołdys",
         "manual",
     ),
 ]
@@ -233,7 +225,7 @@ latex_documents = [
 # One entry per manual page. List of tuples
 # (source start file, name, description, authors, manual section).
 man_pages = [
-    ("index", "pyseaweed", u"PySeaweed Documentation", [u"Łukasz Bołdys"], 1)
+    ("index", "pyseaweed", "PySeaweed Documentation", ["Łukasz Bołdys"], 1)
 ]
 
 # If true, show URL addresses after external links.
@@ -249,8 +241,8 @@ texinfo_documents = [
     (
         "index",
         "PySeaweed",
-        u"PySeaweed Documentation",
-        u"Łukasz Bołdys",
+        "PySeaweed Documentation",
+        "Łukasz Bołdys",
         "PySeaweed",
         "One line description of project.",
         "Miscellaneous",

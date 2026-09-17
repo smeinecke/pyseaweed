@@ -1,6 +1,6 @@
 # Makefile
 
-.PHONY: all format reformat-ruff check fix-ruff fix test test-cov test-integration test-all weed-up weed-down test-integration-local vulture complexity xenon bandit pyright validate
+.PHONY: all format reformat-ruff check fix-ruff fix test test-cov test-integration test-all weed-up weed-down test-integration-local vulture complexity xenon bandit pyright docs validate
 
 # Default target: runs format and check
 all: validate test
@@ -47,7 +47,7 @@ weed-up:
 	@echo "SeaweedFS is ready!"
 
 weed-down:
-	@docker rm -f pyseaweed-test-fs
+	@docker rm -f pyseaweed-test-fs 2>/dev/null || true
 
 test-integration-local: weed-up
 	@uv run pytest tests/integration -v -m integration --timeout=120; status=$$?; $(MAKE) weed-down; exit $$status
@@ -66,6 +66,9 @@ bandit:
 
 pyright:
 	uv run pyright
+
+docs:
+	uv run --group docs sphinx-build -W -b html docs docs/_build
 
 # Validate the code (format + check)
 validate: format check complexity bandit pyright vulture
