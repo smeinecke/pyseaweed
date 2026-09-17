@@ -69,6 +69,10 @@ class SeaweedFS:
             Content of the file with provided fid or None if file doesn't
             exist on the server.
 
+        Raises:
+            BadFidFormat: If fid is not in the
+                ``<volume_id>,<file_name_hash>`` format.
+
         """
         url = self.get_file_url(fid)
         if url is None:
@@ -117,18 +121,20 @@ class SeaweedFS:
             can't be located.
 
         """
-        url = f"http://{self.master_addr}:{self.master_port}/dir/lookup?volumeId={volume_id}"
+        params = urlencode({"volumeId": volume_id})
+        url = f"http://{self.master_addr}:{self.master_port}/dir/lookup?{params}"
         res = self.conn.get_data(url)
         try:
             data = json.loads(res) if res else {}
         except ValueError:
             return None
         locations = data.get("locations") if isinstance(data, dict) else None
-        if not isinstance(locations, list) or not locations:
+        if not isinstance(locations, list):
             return None
-        location = random.choice(locations)
-        if not isinstance(location, dict) or "url" not in location:
+        valid = [loc for loc in locations if isinstance(loc, dict) and loc.get("url")]
+        if not valid:
             return None
+        location = random.choice(valid)
         return FileLocation(location.get("publicUrl") or location["url"], location["url"])
 
     def get_file_size(self, fid: str) -> int | None:
@@ -142,6 +148,10 @@ class SeaweedFS:
         Returns:
             Size in bytes or None if file doesn't exist.
 
+        Raises:
+            BadFidFormat: If fid is not in the
+                ``<volume_id>,<file_name_hash>`` format.
+
         """
         url = self.get_file_url(fid)
         if url is None:
@@ -150,7 +160,10 @@ class SeaweedFS:
         if res is not None:
             size = res.headers.get("content-length", None)
             if size is not None:
-                return int(size)
+                try:
+                    return int(size)
+                except ValueError:
+                    return None
         return None
 
     def file_exists(self, fid: str) -> bool:
@@ -161,6 +174,10 @@ class SeaweedFS:
 
         Returns:
             True if file exists. False if not.
+
+        Raises:
+            BadFidFormat: If fid is not in the
+                ``<volume_id>,<file_name_hash>`` format.
 
         """
         url = self.get_file_url(fid)
@@ -176,6 +193,10 @@ class SeaweedFS:
 
         Returns:
             True if file was deleted. False otherwise.
+
+        Raises:
+            BadFidFormat: If fid is not in the
+                ``<volume_id>,<file_name_hash>`` format.
 
         """
         url = self.get_file_url(fid)
@@ -239,7 +260,7 @@ class SeaweedFS:
             if not isinstance(data, dict) or data.get("error") is not None or "fid" not in data:
                 return None
             key = "publicUrl" if self.use_public_url else "url"
-            volume_url = data.get(key)
+            volume_url = data.get(key) or data.get("url")
             if not volume_url:
                 return None
             post_url = f"http://{volume_url}/{data['fid']}{query}"
@@ -291,7 +312,3 @@ class SeaweedFS:
         if not isinstance(response_data, dict):
             return None
         return response_data.get("Version")
-
-
-if __name__ == "__main__":
-    pass
