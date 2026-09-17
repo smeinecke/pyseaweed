@@ -121,6 +121,19 @@ class TestAsyncConnection:
         with open(__file__, "rb") as f:
             assert await make_conn(not_found).post_file("http://utek.pl", "tests.py", f) is None
 
+    async def test_post_and_put(self) -> None:
+        assert await make_conn(created).post("http://utek.pl")
+        assert await make_conn().put("http://utek.pl")
+        assert not await make_conn(not_found).post("http://utek.pl")
+        assert not await make_conn(not_found).put("http://utek.pl")
+
+        def handler(request: httpx.Request) -> httpx.Response:
+            raise httpx.ConnectError("boom", request=request)
+
+        conn = make_conn(handler)
+        assert not await conn.post("http://utek.pl")
+        assert not await conn.put("http://utek.pl")
+
     async def test_post_file_content_type(self) -> None:
         with open(__file__, "rb") as f:
             assert await make_conn().post_file("http://utek.pl", "tests.py", f, content_type="text/x-python") == "OK"
