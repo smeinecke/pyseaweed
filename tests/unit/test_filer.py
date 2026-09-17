@@ -1,6 +1,7 @@
 import json
+from collections.abc import Callable, Sequence
 from io import BytesIO
-from typing import Any, cast
+from typing import Any
 
 import pytest
 import requests
@@ -14,13 +15,16 @@ def json_resp(data: Any, status: int = 200) -> dict[str, Any]:
     return {"status_code": status, "content": json.dumps(data).encode()}
 
 
-def dispatch(routes: list[tuple[str, Any]]) -> Any:
+RespDict = dict[str, Any]
+Handler = Callable[[Any, Any], RespDict]
+
+
+def dispatch(routes: Sequence[tuple[str, Handler | RespDict]]) -> Any:
     @all_requests
-    def handler(url: Any, request: Any) -> dict[str, Any]:
+    def handler(url: Any, request: Any) -> RespDict:
         for prefix, resp in routes:
             if url.path.startswith(prefix):
-                resp = resp(url, request) if callable(resp) else resp
-                return cast(dict[str, Any], resp)
+                return resp(url, request) if callable(resp) else resp
         return {"status_code": 404, "content": b"NOK"}
 
     return handler
@@ -420,7 +424,7 @@ class TestFilerNegativePaths:
             return {"status_code": 202, "content": b""}
 
         with HTTMock(all_requests(handler)):
-            assert self.filer.set_tags("/x", cast(dict[str, str], {"count": 5, "ok": True}))
+            assert self.filer.set_tags("/x", {"count": 5, "ok": True})
             assert seen[0]["Seaweed-count"] == "5"
             assert seen[0]["Seaweed-ok"] == "True"
             assert self.filer.set_tags("/x", {})

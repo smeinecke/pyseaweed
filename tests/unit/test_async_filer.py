@@ -1,7 +1,7 @@
 import json
 from collections.abc import Callable, Sequence
 from io import BytesIO
-from typing import Any, cast
+from typing import Any
 
 import httpx
 import pytest
@@ -382,7 +382,7 @@ class TestAsyncFilerNegativePaths:
             return httpx.Response(202)
 
         filer = make_filer(handler)
-        assert await filer.set_tags("/x", cast("dict[str, str]", {"count": 5, "ok": True}))
+        assert await filer.set_tags("/x", {"count": 5, "ok": True})
         assert seen[0]["seaweed-count"] == "5"
         assert seen[0]["seaweed-ok"] == "True"
         assert await filer.set_tags("/x", {})

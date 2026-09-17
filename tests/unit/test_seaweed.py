@@ -1,6 +1,7 @@
 import json
+from collections.abc import Callable, Sequence
 from io import BytesIO
-from typing import Any, cast
+from typing import Any
 from unittest import mock
 
 import pytest
@@ -59,13 +60,16 @@ def volume_file(url: Any, request: Any) -> dict[str, Any]:
     return {"status_code": 404, "content": b"NOK"}
 
 
-def dispatch(routes: list[tuple[str, Any]]) -> Any:
+RespDict = dict[str, Any]
+Handler = Callable[[Any, Any], RespDict]
+
+
+def dispatch(routes: Sequence[tuple[str, Handler | RespDict]]) -> Any:
     @all_requests
-    def handler(url: Any, request: Any) -> dict[str, Any]:
+    def handler(url: Any, request: Any) -> RespDict:
         for prefix, resp in routes:
             if url.path.startswith(prefix):
-                resp = resp(url, request) if callable(resp) else resp
-                return cast(dict[str, Any], resp)
+                return resp(url, request) if callable(resp) else resp
         return {"status_code": 404, "content": b"NOK"}
 
     return handler

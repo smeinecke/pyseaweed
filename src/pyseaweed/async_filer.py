@@ -9,7 +9,7 @@ Requires the ``async`` extra::
 
 import base64
 import json
-from collections.abc import AsyncIterator, Iterable
+from collections.abc import AsyncIterator, Iterable, Mapping
 from typing import Any, BinaryIO, Self
 from urllib.parse import urlencode
 
@@ -288,11 +288,11 @@ class AsyncFiler:
             params["ignoreRecursiveError"] = "true"
         return await self.conn.delete_data(self._url(remote_path, params or None))
 
-    async def set_tags(self, remote_path: str, tags: dict[str, str]) -> bool:
+    async def set_tags(self, remote_path: str, tags: Mapping[str, object]) -> bool:
         """Set or replace extended attributes (tags) on a file.
 
         Tag names are stored in canonical header form, e.g. ``color``
-        is stored as ``Color``. Tag values may be arbitrary strings.
+        is stored as ``Color``. Tag values are coerced with ``str()``.
 
         Args:
             remote_path: Path of the file.
