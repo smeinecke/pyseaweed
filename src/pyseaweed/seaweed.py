@@ -181,8 +181,10 @@ class SeaweedFS:
         """
         fid = fid.strip()
         try:
-            volume_id, _ = fid.split(",")
+            volume_id, file_key = fid.split(",")
         except ValueError:
+            raise BadFidFormat("fid must be in format: <volume_id>,<file_name_hash>")
+        if not volume_id or not file_key:
             raise BadFidFormat("fid must be in format: <volume_id>,<file_name_hash>")
         file_location = self.get_file_location(volume_id, collection=collection)
         if file_location is None:

@@ -255,10 +255,9 @@ class TestSeaweedFS:
             assert self.seaweed.get_file_url(FID, public=False) == f"http://vol.local:8080/{FID}"
 
     def test_get_file_url_bad_fid(self) -> None:
-        with pytest.raises(BadFidFormat):
-            self.seaweed.get_file_url("badfid")
-        with pytest.raises(BadFidFormat):
-            self.seaweed.get_file_url("1,2,3")
+        for bad_fid in ("badfid", "1,2,3", "3,", ",abc", "", "  "):
+            with pytest.raises(BadFidFormat):
+                self.seaweed.get_file_url(bad_fid)
 
     def test_get_file_url_no_volume(self) -> None:
         mock = dispatch([("/dir/lookup", json_resp({"locations": []}))])
