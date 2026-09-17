@@ -303,18 +303,7 @@ class SeaweedFS:
             RuntimeError: If the volume server rejects the upload.
 
         """
-        # we have file like object and filename
-        close_stream = False
-        if path is not None:
-            filename = os.path.basename(path) if name is None else name
-            file_stream = open(path, "rb")
-            close_stream = True
-        elif stream is not None and name is not None:
-            filename = name
-            file_stream = stream
-        else:
-            raise ValueError("If `path` is None then *both* `stream` and `name` must not be None")
-
+        filename, file_stream, close_stream = self._prepare_stream(path, stream, name)
         try:
             params = urlencode(kwargs)
             query = f"?{params}" if params else ""
@@ -347,6 +336,73 @@ class SeaweedFS:
             return data.get("fid")
 
         raise RuntimeError(f"Upload failed: {response_data}")
+
+    @staticmethod
+    def _prepare_stream(
+        path: str | None,
+        stream: BinaryIO | None,
+        name: str | None,
+    ) -> tuple[str, BinaryIO, bool]:
+        """Resolve path/stream/name into a (filename, stream, close) triple.
+
+        The returned flag indicates whether the caller owns the stream
+        (opened from ``path``) and must close it afterwards.
+        """
+        if path is not None:
+            filename = os.path.basename(path) if name is None else name
+            return filename, open(path, "rb"), True
+        if stream is not None and name is not None:
+            return name, stream, False
+        raise ValueError("If `path` is None then *both* `stream` and `name` must not be None")
+
+    def submit_file(
+        self,
+        path: str | None = None,
+        stream: BinaryIO | None = None,
+        name: str | None = None,
+        additional_headers: dict[str, str] | None = None,
+        content_type: str | None = None,
+    ) -> str | None:
+        """Upload file directly through the master ``/submit`` endpoint.
+
+        Convenience one-call upload: the master assigns a file id and
+        stores the file on the right volume server. Unlike
+        ``upload_file`` it does not support assign parameters
+        (``collection``, ``replication``, ``ttl``, ...).
+
+        Args:
+            path: Path to the file to upload.
+            stream: File-like object to upload.
+            name: Name of the uploaded file.
+            additional_headers: Additional headers for the upload request.
+            content_type: Content type of the uploaded file.
+
+        Returns:
+            Fid of the uploaded file or None if the upload failed.
+
+        Raises:
+            ValueError: If ``path`` is None and not both ``stream`` and
+                ``name`` are provided.
+
+        """
+        filename, file_stream, close_stream = self._prepare_stream(path, stream, name)
+        try:
+            url = f"http://{self.master_addr}:{self.master_port}/submit"
+            res = self.conn.post_file(url, filename, file_stream, additional_headers=additional_headers, content_type=content_type)
+        finally:
+            if close_stream:
+                file_stream.close()
+
+        if res is None:
+            return None
+        try:
+            data = json.loads(res)
+        except ValueError:
+            return None
+        if not isinstance(data, dict):
+            return None
+        fid = data.get("fid")
+        return fid if isinstance(fid, str) else None
 
     def vacuum(self, threshold: float = 0.3) -> bool:
         """Force garbage collection.
