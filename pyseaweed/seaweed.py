@@ -1,130 +1,146 @@
-# -*- coding: utf-8 -*-
 # vi:si:et:sw=4:sts=4:ts=4
 
 
-"""Main PySeaweed module. Contains SeaweedFS class
-"""
+"""Main PySeaweed module. Contains SeaweedFS class."""
+
+from __future__ import annotations
 
 import json
 import os
 import random
-from collections import namedtuple
+from typing import BinaryIO, NamedTuple
+from urllib.parse import urlencode
 
 from pyseaweed.exceptions import BadFidFormat
 from pyseaweed.utils import Connection
 
 
-class SeaweedFS(object):
-    master_addr = "localhost"
-    master_port = 9333
+class FileLocation(NamedTuple):
+    """Location of a SeaweedFS volume server."""
+
+    public_url: str
+    url: str
+
+
+class SeaweedFS:
+    """Client for the SeaweedFS HTTP API."""
 
     def __init__(
         self,
-        master_addr="localhost",
-        master_port=9333,
-        use_session=False,
-        use_public_url=True,
-    ):
-        """Creates SeaweedFS instance.
+        master_addr: str = "localhost",
+        master_port: int = 9333,
+        use_session: bool = False,
+        use_public_url: bool = True,
+    ) -> None:
+        """Create a SeaweedFS instance.
 
         Args:
-            **master_addr**: Address of Seaweed-fs master server
-                             (default: localhost)
-
-            **master_port**: Weed-fs master server port (default: 9333)
-            **use_session**: Use request.Session() for connections instead of
-                             requests themselves. (default: False)
-            **use_public_url**: If ``True``, all the requests will use
-                             ``publicUrl`` link instead of ``url``.
+            master_addr: Address of SeaweedFS master server
+                (default: localhost).
+            master_port: SeaweedFS master server port (default: 9333).
+            use_session: Use ``requests.Session()`` for connections instead of
+                plain ``requests`` calls (default: False).
+            use_public_url: If ``True``, all the requests will use
+                ``publicUrl`` link instead of ``url``.
 
         Returns:
             SeaweedFS instance.
+
         """
         self.master_addr = master_addr
         self.master_port = master_port
         self.conn = Connection(use_session)
         self.use_public_url = use_public_url
 
-    def __repr__(self):
-        return "<{0} {1}:{2}>".format(
-            self.__class__.__name__, self.master_addr, self.master_port
-        )
+    def __repr__(self) -> str:
+        """Return string representation of the instance."""
+        return f"<{self.__class__.__name__} {self.master_addr}:{self.master_port}>"
 
-    def get_file(self, fid):
+    def get_file(self, fid: str) -> bytes | None:
         """Get file from SeaweedFS.
 
-        Returns file content. May be problematic for large files as content is
+        Return file content. May be problematic for large files as content is
         stored in memory.
 
         Args:
-            **fid**: File identifier <volume_id>,<file_name_hash>
+            fid: File identifier ``<volume_id>,<file_name_hash>``.
 
         Returns:
             Content of the file with provided fid or None if file doesn't
-            exist on the server
+            exist on the server.
 
-        .. versionadded:: 0.3.1
         """
         url = self.get_file_url(fid)
+        if url is None:
+            return None
         return self.conn.get_raw_data(url)
 
-    def get_file_url(self, fid, public=None):
-        """
-        Get url for the file
+    def get_file_url(self, fid: str, public: bool | None = None) -> str | None:
+        """Get url for the file.
 
-        :param string fid: File ID
-        :param boolean public: public or internal url
-        :rtype: string
+        Args:
+            fid: File identifier ``<volume_id>,<file_name_hash>``.
+            public: Use the public or the internal url. Defaults to the
+                ``use_public_url`` setting of this instance.
+
+        Returns:
+            File url as string or None if the volume can't be located.
+
+        Raises:
+            BadFidFormat: If fid is not in the
+                ``<volume_id>,<file_name_hash>`` format.
+
         """
+        fid = fid.strip()
         try:
-            volume_id, rest = fid.strip().split(",")
+            volume_id, _ = fid.split(",")
         except ValueError:
-            raise BadFidFormat(
-                "fid must be in format: <volume_id>,<file_name_hash>"
-            )
+            raise BadFidFormat("fid must be in format: <volume_id>,<file_name_hash>")
         file_location = self.get_file_location(volume_id)
+        if file_location is None:
+            return None
         if public is None:
             public = self.use_public_url
         volume_url = file_location.public_url if public else file_location.url
-        url = "http://{volume_url}/{fid}".format(
-            volume_url=volume_url, fid=fid
-        )
-        return url
+        return f"http://{volume_url}/{fid}"
 
-    def get_file_location(self, volume_id):
-        """
-        Get location for the file,
-        SeaweedFS volume is choosed randomly
+    def get_file_location(self, volume_id: str) -> FileLocation | None:
+        """Get location for the file.
 
-        :param integer volume_id: volume_id
-        :rtype: namedtuple `FileLocation` `{"public_url":"", "url":""}`
-        """
-        url = (
-            "http://{master_addr}:{master_port}/"
-            "dir/lookup?volumeId={volume_id}"
-        ).format(
-            master_addr=self.master_addr,
-            master_port=self.master_port,
-            volume_id=volume_id,
-        )
-        data = json.loads(self.conn.get_data(url))
-        _file_location = random.choice(data["locations"])
-        FileLocation = namedtuple("FileLocation", "public_url url")
-        return FileLocation(_file_location["publicUrl"], _file_location["url"])
-
-    def get_file_size(self, fid):
-        """
-        Gets size of uploaded file on SeaweedFS volume. For some type of files
-        Gzip Compression might be applied.
-        Or None if file doesn't exist.
+        SeaweedFS volume is chosen randomly.
 
         Args:
-            **fid**: File identifier <volume_id>,<file_name_hash>
+            volume_id: Volume id.
 
         Returns:
-            Int or None
+            ``FileLocation`` namedtuple or None if the volume
+            can't be located.
+
+        """
+        url = f"http://{self.master_addr}:{self.master_port}/dir/lookup?volumeId={volume_id}"
+        res = self.conn.get_data(url)
+        data = json.loads(res) if res else {}
+        locations = data.get("locations") or []
+        if not locations:
+            return None
+        _file_location = random.choice(locations)
+        return FileLocation(_file_location["publicUrl"], _file_location["url"])
+
+    def get_file_size(self, fid: str) -> int | None:
+        """Get size of uploaded file on SeaweedFS volume.
+
+        For some type of files Gzip Compression might be applied.
+
+        Args:
+            fid: File identifier ``<volume_id>,<file_name_hash>``.
+
+        Returns:
+            Size in bytes or None if file doesn't exist.
+
         """
         url = self.get_file_url(fid)
+        if url is None:
+            return None
         res = self.conn.head(url)
         if res is not None:
             size = res.headers.get("content-length", None)
@@ -132,60 +148,74 @@ class SeaweedFS(object):
                 return int(size)
         return None
 
-    def file_exists(self, fid):
-        """Checks if file with provided fid exists
+    def file_exists(self, fid: str) -> bool:
+        """Check if file with provided fid exists.
 
         Args:
-            **fid**: File identifier <volume_id>,<file_name_hash>
+            fid: File identifier ``<volume_id>,<file_name_hash>``.
 
         Returns:
             True if file exists. False if not.
-        """
-        res = self.get_file_size(fid)
-        if res is not None:
-            return True
-        return False
 
-    def delete_file(self, fid):
         """
-        Delete file from SeaweedFS
+        return self.get_file_size(fid) is not None
 
-        :param string fid: File ID
+    def delete_file(self, fid: str) -> bool:
+        """Delete file from SeaweedFS.
+
+        Args:
+            fid: File identifier ``<volume_id>,<file_name_hash>``.
+
+        Returns:
+            True if file was deleted. False otherwise.
+
         """
         url = self.get_file_url(fid)
+        if url is None:
+            return False
         return self.conn.delete_data(url)
 
-    def upload_file(self, path=None, stream=None, name=None, additional_headers=None, content_type=None, **kwargs):
-        """
-        Uploads file to SeaweedFS
+    def upload_file(
+        self,
+        path: str | None = None,
+        stream: BinaryIO | None = None,
+        name: str | None = None,
+        additional_headers: dict[str, str] | None = None,
+        content_type: str | None = None,
+        **kwargs: str,
+    ) -> str | None:
+        """Upload file to SeaweedFS.
 
-        I takes either path or stream and name and upload it
+        It takes either path or stream and name and uploads it
         to SeaweedFS server.
 
-        Returns fid of the uploaded file.
+        Args:
+            path: Path to the file to upload.
+            stream: File-like object to upload.
+            name: Name of the uploaded file.
+            additional_headers: Additional headers for the upload request.
+            content_type: Content type of the uploaded file.
+            **kwargs: Extra parameters forwarded to the ``/dir/assign``
+                request (e.g. ``collection``, ``replication``, ``ttl``).
 
-        :param string path:
-        :param string stream:
-        :param string name:
-        :param dict additional_headers:
-        :param string content_type:
-        :rtype: string or None
+        Returns:
+            Fid of the uploaded file or None if the upload failed.
+
+        Raises:
+            ValueError: If ``path`` is None and not both ``stream`` and
+                ``name`` are provided.
+            RuntimeError: If the volume server rejects the upload.
 
         """
-        params = "&".join(["%s=%s" % (k, v) for k, v in kwargs.items()])
-        url = "http://{master_addr}:{master_port}/dir/assign{params}".format(
-            master_addr=self.master_addr,
-            master_port=self.master_port,
-            params="?" + params if params else "",
-        )
-        data = json.loads(self.conn.get_data(url))
-        if data.get("error") is not None:
+        params = urlencode(kwargs)
+        query = f"?{params}" if params else ""
+        url = f"http://{self.master_addr}:{self.master_port}/dir/assign{query}"
+        res = self.conn.get_data(url)
+        data = json.loads(res) if res else {}
+        if data.get("error") is not None or "fid" not in data:
             return None
-        post_url = "http://{url}/{fid}{params}".format(
-            url=data["publicUrl" if self.use_public_url else "url"],
-            fid=data["fid"],
-            params="?" + params if params else "",
-        )
+        key = "publicUrl" if self.use_public_url else "url"
+        post_url = f"http://{data[key]}/{data['fid']}{query}"
 
         if path is not None:
             filename = os.path.basename(path) if name is None else name
@@ -195,50 +225,40 @@ class SeaweedFS(object):
         elif stream is not None and name is not None:
             res = self.conn.post_file(post_url, name, stream, additional_headers=additional_headers, content_type=content_type)
         else:
-            raise ValueError(
-                "If `path` is None then *both* `stream` and `name` must not"
-                " be None "
-            )
+            raise ValueError("If `path` is None then *both* `stream` and `name` must not be None")
+        if res is None:
+            return None
         response_data = json.loads(res)
         if "size" in response_data:
             return data.get("fid")
 
-        raise RuntimeError("Upload failed", response_data=response_data)
+        raise RuntimeError(f"Upload failed: {response_data}")
 
-    def vacuum(self, threshold=0.3):
+    def vacuum(self, threshold: float = 0.3) -> bool:
+        """Force garbage collection.
+
+        Args:
+            threshold: The threshold is optional, and will not change
+                the default threshold on the server.
+
+        Returns:
+            True if the request succeeded. False otherwise.
+
         """
-        Force garbage collection
-
-        :param float threshold (optional): The threshold is optional, and
-        will not change the default threshold.
-        :rtype: boolean
-
-        """
-        url = (
-            "http://{master_addr}:{master_port}/"
-            "vol/vacuum?garbageThreshold={threshold}"
-        ).format(
-            master_addr=self.master_addr,
-            master_port=self.master_port,
-            threshold=threshold,
-        )
-        res = self.conn.get_data(url)
-        if res is not None:
-            return True
-        return False
+        url = f"http://{self.master_addr}:{self.master_port}/vol/vacuum?garbageThreshold={threshold}"
+        return self.conn.get_data(url) is not None
 
     @property
-    def version(self):
-        """
-        Returns Weed-FS master version
+    def version(self) -> str | None:
+        """Return Weed-FS master version.
 
-        :rtype: string
+        Returns:
+            Version string or None if the master can't be reached.
+
         """
-        url = "http://{master_addr}:{master_port}/dir/status".format(
-            master_addr=self.master_addr, master_port=self.master_port
-        )
+        url = f"http://{self.master_addr}:{self.master_port}/dir/status"
         data = self.conn.get_data(url)
-        response_data = json.loads(data)
+        response_data = json.loads(data) if data else {}
         return response_data.get("Version")
 
 
