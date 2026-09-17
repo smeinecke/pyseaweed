@@ -3,6 +3,19 @@ Changelog
 ===========
 
 -------
+3.1.1
+-------
+
+    - Fix ``Filer.delete_tags`` / ``AsyncFiler.delete_tags`` with an
+      empty ``names`` iterable deleting *all* tags — it is now a no-op
+    - Fix ``AsyncConnection.get_stream`` swallowing mid-stream errors
+      (silently truncated downloads) and replaying the body from byte
+      0 on retry — failures now propagate once chunks were yielded
+    - Testing: mutation testing with mutmut (``make mutation``, weekly
+      CI), transport-level fault-injection tests, live fault injection
+      via toxiproxy, and expanded negative-path coverage
+
+-------
 3.1.0
 -------
 
@@ -12,8 +25,6 @@ Changelog
       pagination, ``mkdir``, ``move``, ``delete`` (``recursive``),
       and extended-attribute tagging via ``set_tags``, ``get_tags``
       and ``delete_tags``
-    - Fix ``Filer.delete_tags`` / ``AsyncFiler.delete_tags`` with an
-      empty ``names`` iterable deleting *all* tags — it is now a no-op
     - Add ``AsyncFiler``, an async variant of ``Filer`` mirroring the
       full filer API on top of httpx. Available as
       ``from pyseaweed import AsyncFiler`` or
@@ -31,9 +42,6 @@ Changelog
       optional extension)
     - CI: unit tests now run on Python 3.13 and 3.14; release builds
       are attested with build provenance
-    - Testing: mutation testing with mutmut (``make mutation``, weekly
-      CI), transport-level fault-injection tests, live fault injection
-      via toxiproxy, and expanded negative-path coverage
 
 -------
 3.0.0
